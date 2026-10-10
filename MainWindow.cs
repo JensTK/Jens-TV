@@ -48,6 +48,7 @@ public sealed class MainWindow : Window
     string? _injectedScriptId;
     string? _mappedPhotoFolder;
     bool _launcherReloading;
+    string? _launchHotkeyError;
     string? _pendingToast;
     DateTime _ignoreConfigChangesUntil;
     bool _shutDown;
@@ -171,6 +172,17 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             Log.Error("Updating start-with-Windows failed", ex);
+        }
+
+        _launchHotkeyError = null;
+        try
+        {
+            LaunchShortcut.Update(_config.LaunchHotkey);
+        }
+        catch (Exception ex)
+        {
+            _launchHotkeyError = ex is ArgumentException ? ex.Message : "couldn't create the Start Menu shortcut";
+            Log.Error("Updating the launch shortcut failed", ex);
         }
 
         _ = UpdateInjectedScriptAsync();
@@ -520,6 +532,8 @@ public sealed class MainWindow : Window
         }
         if (_config.Audio.SwitchSystemDefault && _config.Audio.DeviceId != null && audioDevices.All(d => d.Id != _config.Audio.DeviceId))
             notices.Add($"Sound device \"{_config.Audio.DeviceName}\" not connected");
+        if (_launchHotkeyError != null)
+            notices.Add($"Launch hotkey: {_launchHotkeyError}");
         var failedKeys = _hotkeys.Failed.Concat(_tvKeys.Failed).ToList();
         if (failedKeys.Count > 0)
             notices.Add($"Hotkey unavailable: {string.Join(", ", failedKeys)}");
@@ -681,6 +695,9 @@ public sealed class MainWindow : Window
             return !IsLauncherShowing();
         return _runner.OwnsProcess((int)pid);
     }
+
+    /// <summary>Jens-TV was started again while running (launch hotkey): come to the front on the home screen.</summary>
+    public void ShowHome() => GoHome();
 
     void GoHome()
     {

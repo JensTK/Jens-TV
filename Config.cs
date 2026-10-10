@@ -23,6 +23,12 @@ public sealed class AppConfig
 
     public bool StartWithWindows { get; set; }
 
+    /// <summary>
+    /// Starts Jens-TV (or brings it to the front) from anywhere. Implemented as a Windows shortcut key on a Start Menu
+    /// shortcut, so nothing runs while Jens-TV is closed. Needs Ctrl and/or Alt; empty disables it.
+    /// </summary>
+    public string? LaunchHotkey { get; set; } = "Ctrl+Alt+T";
+
     /// <summary>Show app logos without their tile backgrounds; the focused tile gets a frosted-glass panel.</summary>
     public bool TransparentTiles { get; set; }
     public List<AppEntry> Apps { get; set; } = [];

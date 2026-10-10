@@ -21,6 +21,12 @@ Requires Windows 10/11, the .NET 10 Desktop Runtime, the Edge WebView2 Runtime (
 First run: open **Settings** (the gear in the top right: press Up from the tiles) and pick the TV display and sound
 output, then set the Jellyfin address.
 
+**Launch hotkey:** press **Ctrl+Alt+T** anywhere to start Jens-TV, or to bring it to the front on the home screen if
+it's already running. Jens-TV puts a "Jens-TV" shortcut in the Start Menu with that Windows shortcut key, so Windows
+itself handles the key and nothing runs in the background while Jens-TV is closed. The shortcut points at whichever
+JensTV.exe ran last (start the published exe once after `dotnet publish`). Change the key with `launchHotkey`
+(Ctrl and/or Alt plus a key) or set it to `""` to turn it off.
+
 ## Controls
 
 | Action | Keyboard / remote | Gamepad |
@@ -82,6 +88,7 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
   "tvHotkeys": ["Home"],                             // only while Jens-TV or its app is in front
   "gamepadHome": true,
   "startWithWindows": false,
+  "launchHotkey": "Ctrl+Alt+T",   // Windows shortcut key on the Start Menu shortcut; "" = none
   "transparentTiles": false,      // logos without tile backgrounds; also a switch in Settings
   "apps": [
     { "id": "jellyfin", "name": "Jellyfin", "type": "web", "url": "http://localhost:8096", "icon": "jellyfin" },
