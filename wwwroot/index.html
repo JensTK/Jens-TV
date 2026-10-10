@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jens-TV</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="hide-cursor">
+  <div id="bg"></div>
+
+  <header class="topbar">
+    <div class="brand">Jens<span>TV</span></div>
+    <div class="status">
+      <span id="notice" hidden></span>
+      <time id="clock"></time>
+    </div>
+  </header>
+
+  <main id="home">
+    <section class="hero">
+      <h1 id="hero-title"></h1>
+      <p id="hero-sub"></p>
+    </section>
+    <div id="tiles" class="tiles"></div>
+    <p id="hint" class="hint"></p>
+  </main>
+
+  <section id="settings" class="settings" aria-label="Settings">
+    <div class="settings-side">
+      <div class="settings-icon" id="settings-icon"></div>
+      <h2>Settings</h2>
+      <p>Choose which screen and speakers Jens-TV uses. Advanced options live in config.json.</p>
+    </div>
+    <div id="settings-list" class="settings-list"></div>
+  </section>
+
+  <div id="toast" role="status"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

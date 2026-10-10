@@ -1,0 +1,275 @@
+@property --glow {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2a3550;
+}
+
+:root {
+  --bg: #07080b;
+  --fg: #f5f5f7;
+  --muted: rgba(245, 245, 247, 0.58);
+  --faint: rgba(245, 245, 247, 0.32);
+  --warn: #ffb547;
+  --danger: #ff5a5f;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: dark;
+  transition: --glow 900ms ease;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* 1rem = 20px at 1080p, 40px at 4K: everything scales with the TV. */
+html { font-size: calc(100vh / 54); }
+
+html { background: var(--bg); }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  color: var(--fg);
+  font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+body.hide-cursor, body.hide-cursor * { cursor: none !important; }
+
+#bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 75% 65% at 22% 0%, var(--glow) 0%, transparent 72%),
+    radial-gradient(ellipse 50% 45% at 100% 100%, rgba(255, 255, 255, 0.05), transparent 70%),
+    var(--bg);
+}
+
+/* ---------------------------------------------------------------- top bar */
+
+.topbar {
+  position: absolute;
+  top: 2.6rem;
+  left: 4.5rem;
+  right: 4.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.brand { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.02em; }
+.brand span { font-weight: 300; margin-left: 0.15em; opacity: 0.8; }
+
+.status { display: flex; align-items: center; gap: 1.6rem; }
+
+#clock { font-size: 1.6rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+#notice {
+  font-size: 0.95rem;
+  color: var(--warn);
+  max-width: 50rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#notice::before { content: '● '; }
+
+/* ---------------------------------------------------------------- home */
+
+.hero {
+  position: absolute;
+  left: 4.5rem;
+  top: 24vh;
+  max-width: 60rem;
+}
+
+.hero h1 {
+  font-size: 4.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.hero p {
+  margin-top: 0.9rem;
+  font-size: 1.45rem;
+  color: var(--muted);
+  min-height: 1.45em;
+}
+
+.tiles {
+  position: absolute;
+  left: 4.5rem;
+  right: 4.5rem;
+  bottom: 13rem;
+  display: flex;
+  gap: 2.2rem;
+}
+
+.tile-wrap { position: relative; flex: 0 0 auto; }
+
+.tile {
+  position: relative;
+  width: 20.5rem;
+  aspect-ratio: 16 / 9;
+  border-radius: 1.1rem;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #262a33;
+  box-shadow: 0 0.6rem 1.4rem rgba(0, 0, 0, 0.45);
+  transition: transform 260ms var(--ease), box-shadow 260ms var(--ease);
+}
+
+/* Glossy highlight that appears on the focused tile. */
+.tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 42%);
+  opacity: 0;
+  transition: opacity 260ms var(--ease);
+}
+
+.tile-wrap.focused .tile {
+  transform: scale(1.12) translateY(-0.5rem);
+  box-shadow: 0 2rem 3.4rem rgba(0, 0, 0, 0.7);
+  z-index: 2;
+}
+.tile-wrap.focused .tile::after { opacity: 1; }
+
+.tile svg { width: 36%; height: auto; }
+.tile img { max-width: 60%; max-height: 60%; object-fit: contain; }
+.tile .letter { font-size: 5rem; font-weight: 700; color: #fff; }
+
+.tile .badge {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.tile-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 1.6rem);
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+  opacity: 0;
+  transform: translateY(-0.4rem);
+  transition: opacity 220ms var(--ease), transform 220ms var(--ease);
+}
+.tile-wrap.focused .tile-label { opacity: 1; transform: none; }
+
+.hint {
+  position: absolute;
+  left: 4.5rem;
+  bottom: 3rem;
+  font-size: 1rem;
+  color: var(--faint);
+  white-space: pre;
+}
+
+/* ---------------------------------------------------------------- settings */
+
+.settings {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  align-items: center;
+  gap: 4rem;
+  padding: 0 6rem;
+  background: rgba(7, 8, 11, 0.86);
+  backdrop-filter: blur(2rem);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 260ms var(--ease);
+}
+.settings.active { opacity: 1; pointer-events: auto; }
+
+.settings-side { text-align: center; }
+.settings-icon { width: 13rem; margin: 0 auto 2rem; }
+.settings-icon svg { width: 100%; height: auto; opacity: 0.9; }
+.settings-side h2 { font-size: 2.8rem; font-weight: 700; }
+.settings-side p { margin: 0.8rem auto 0; max-width: 24rem; font-size: 1.1rem; color: var(--muted); }
+
+.settings-list {
+  max-height: 84vh;
+  overflow-y: auto;
+  padding: 1rem 1.2rem;
+  scrollbar-width: none;
+}
+.settings-list::-webkit-scrollbar { display: none; }
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+  min-height: 3.6rem;
+  padding: 0.7rem 1.6rem;
+  border-radius: 0.8rem;
+  font-size: 1.3rem;
+  transition: background 160ms ease, color 160ms ease, transform 160ms var(--ease);
+}
+.row.gap { margin-top: 1.6rem; }
+.row .label { flex: 0 1 auto; }
+.row .value {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.row.danger .label { color: var(--danger); }
+
+.row.focused { background: var(--fg); color: #111; transform: scale(1.025); }
+.row.focused .value { color: rgba(0, 0, 0, 0.6); }
+.row.focused.select .value::before { content: '‹  '; }
+.row.focused.select .value::after { content: '  ›'; }
+
+.row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 34rem;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  text-align: right;
+  outline: none;
+}
+.row.focused input { color: rgba(0, 0, 0, 0.65); }
+.row input:focus { background: #fff; color: #111; box-shadow: 0 0 0 0.15rem #3b82f6; text-align: left; }
+
+/* ---------------------------------------------------------------- toast */
+
+#toast {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: 3rem;
+  max-width: 70vw;
+  padding: 0.9rem 1.8rem;
+  border-radius: 2rem;
+  background: rgba(40, 42, 50, 0.92);
+  backdrop-filter: blur(1rem);
+  font-size: 1.15rem;
+  opacity: 0;
+  transform: translate(-50%, 1rem);
+  transition: opacity 240ms var(--ease), transform 240ms var(--ease);
+  pointer-events: none;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
