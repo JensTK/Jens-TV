@@ -44,6 +44,54 @@ body.hide-cursor, body.hide-cursor * { cursor: none !important; }
     var(--bg);
 }
 
+/* ---------------------------------------------------------------- photo slideshow */
+
+#slides {
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  overflow: hidden;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 1.8s ease;
+}
+
+/* Slow "Ken Burns" push-in while a photo is showing. */
+.slide.visible {
+  opacity: 1;
+  animation: slow-zoom var(--slide-duration, 32s) linear forwards;
+}
+
+@keyframes slow-zoom {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
+}
+
+/* Keeps the title (left) and tiles (bottom) readable over any photo. */
+#shade {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  display: none;
+  --dim: 0.45;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, calc(var(--dim) + 0.3)) 0%, rgba(0, 0, 0, var(--dim)) 50%, rgba(0, 0, 0, calc(var(--dim) * 0.5)) 100%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0%, transparent 50%);
+}
+
+body.has-slides #shade { display: block; }
+
+body.has-slides #bg {
+  background: radial-gradient(ellipse 75% 65% at 22% 0%, var(--glow) 0%, transparent 72%);
+  opacity: 0.55;
+}
+
 /* ---------------------------------------------------------------- top bar */
 
 .topbar {

@@ -45,6 +45,9 @@ Pressing Back on Jellyfin's home screen also returns to the launcher.
   your everyday Firefox and its settings stay untouched. To install add-ons like uBlock Origin or SponsorBlock into
   that profile, set `firefox.kiosk` to `false`, open YouTube from the launcher, install them, then set it back.
 - **Jellyfin**: runs in WebView2; logins persist in `%LOCALAPPDATA%\JensTV\WebView2`.
+- **Background slideshow**: choose a photo folder in Settings (the picker opens on the TV; use a mouse). Photos
+  (jpg, png, webp, gif, bmp, avif, including subfolders) crossfade behind the menu with a slow zoom, darkened so
+  the menu stays readable. The folder is re-scanned whenever the launcher reloads or settings change.
 
 ## Config
 
@@ -61,6 +64,11 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
     "kiosk": true,
     "userAgent": "…",             // must look like a TV/console for youtube.com/tv
     "extraPrefs": { "media.hardware-video-decoding.force-enabled": true }
+  },
+  "slideshow": {                  // photos behind the launcher; folder can also be picked in Settings
+    "enabled": true, "folder": "D:\\Photos\\Favourites", "intervalSeconds": 30,
+    "shuffle": true, "includeSubfolders": true,
+    "dim": 0.45                   // 0 = photos at full brightness, 1 = black
   },
   "homeHotkeys": ["BrowserHome", "Ctrl+Alt+Home"],   // global; WPF key names, modifiers Ctrl/Alt/Shift/Win
   "tvHotkeys": ["Home"],                             // only while Jens-TV or its app is in front

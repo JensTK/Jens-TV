@@ -88,7 +88,78 @@ function onHostMessage(msg) {
     if (screen === 'settings' && document.activeElement?.tagName !== 'INPUT') renderSettings();
   } else if (msg.type === 'toast') {
     toast(msg.text);
+  } else if (msg.type === 'slideshow') {
+    startSlideshow(msg);
+  } else if (msg.type === 'folderPicked') {
+    if (draft) {
+      draft.slideshowFolder = msg.path;
+      renderSettings();
+    }
   }
+}
+
+// ---------------------------------------------------------------- background slideshow
+
+const slideshow = { images: [], order: [], pos: 0, intervalMs: 30000, timer: 0, front: 0 };
+const slideEls = [...document.querySelectorAll('.slide')];
+
+function startSlideshow(msg) {
+  clearTimeout(slideshow.timer);
+  slideshow.images = msg.images || [];
+  slideshow.intervalMs = (msg.intervalSeconds || 30) * 1000;
+  slideshow.order = slideshow.images.map((_, i) => i);
+  if (msg.shuffle) {
+    for (let i = slideshow.order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [slideshow.order[i], slideshow.order[j]] = [slideshow.order[j], slideshow.order[i]];
+    }
+  }
+  slideshow.pos = 0;
+
+  const root = document.documentElement;
+  document.getElementById('shade').style.setProperty('--dim', msg.dim ?? 0.45);
+  // Zoom lasts a little longer than the photo so it never visibly stops before the crossfade.
+  root.style.setProperty('--slide-duration', `${slideshow.intervalMs / 1000 + 4}s`);
+
+  const active = slideshow.images.length > 0;
+  document.body.classList.toggle('has-slides', active);
+  if (!active) {
+    slideEls.forEach((el) => el.classList.remove('visible'));
+    return;
+  }
+  showNextSlide();
+}
+
+function showNextSlide() {
+  clearTimeout(slideshow.timer);
+  if (slideshow.images.length === 0) return;
+
+  // Don't churn through photos while an app covers the launcher; pick up again when we're back.
+  if (!document.hasFocus() && slideEls.some((el) => el.classList.contains('visible'))) {
+    slideshow.timer = setTimeout(showNextSlide, 2000);
+    return;
+  }
+
+  const url = slideshow.images[slideshow.order[slideshow.pos]];
+  slideshow.pos = (slideshow.pos + 1) % slideshow.order.length;
+
+  // Decode before swapping so the crossfade never shows a half-loaded photo.
+  const img = new Image();
+  img.src = url;
+  img.decode()
+    .then(() => {
+      const next = slideEls[1 - slideshow.front];
+      next.style.backgroundImage = `url("${url}")`;
+      next.classList.remove('visible');
+      void next.offsetWidth; // restart the zoom animation
+      next.classList.add('visible');
+      slideEls[slideshow.front].classList.remove('visible');
+      slideshow.front = 1 - slideshow.front;
+      slideshow.timer = setTimeout(showNextSlide, slideshow.intervalMs);
+    })
+    .catch(() => {
+      slideshow.timer = setTimeout(showNextSlide, 500); // unreadable file: skip it
+    });
 }
 
 if (webview) {
@@ -214,6 +285,9 @@ function openSettings() {
     audioDeviceId: state.config.audio.deviceId || currentDefault,
     switchAudio: state.config.audio.switchSystemDefault,
     startWithWindows: state.config.startWithWindows,
+    slideshowEnabled: state.config.slideshow.enabled,
+    slideshowFolder: state.config.slideshow.folder || null,
+    slideshowInterval: state.config.slideshow.intervalSeconds,
     urls: Object.fromEntries(
       state.config.apps
         .filter((a) => a.type === 'web' || a.type === 'firefox')
@@ -249,6 +323,15 @@ function audioOptions() {
   return options;
 }
 
+function intervalOptions(current) {
+  const seconds = [10, 20, 30, 60, 120, 300];
+  if (current && !seconds.includes(current)) seconds.push(current); // keep a custom value from config.json
+  return seconds.sort((a, b) => a - b).map((s) => ({
+    value: s,
+    label: s < 60 ? `${s} seconds` : s === 60 ? '1 minute' : `${s / 60} minutes`,
+  }));
+}
+
 function buildSettingsRows() {
   const rows = [
     {
@@ -258,6 +341,12 @@ function buildSettingsRows() {
     { kind: 'select', label: 'Sound output', key: 'audioDeviceId', options: audioOptions },
     { kind: 'toggle', label: 'Use this sound output while Jens-TV runs', key: 'switchAudio' },
     { kind: 'toggle', label: 'Start with Windows', key: 'startWithWindows' },
+    { kind: 'toggle', label: 'Background slideshow', key: 'slideshowEnabled', gap: true },
+    { kind: 'folder', label: 'Photo folder', key: 'slideshowFolder' },
+    {
+      kind: 'select', label: 'Change photo every', key: 'slideshowInterval',
+      options: () => intervalOptions(draft.slideshowInterval),
+    },
   ];
 
   state.config.apps
@@ -284,6 +373,8 @@ function renderSettings() {
       node.append(el('span', 'value', option ? option.label : 'None'));
     } else if (row.kind === 'toggle') {
       node.append(el('span', 'value', draft[row.key] ? 'On' : 'Off'));
+    } else if (row.kind === 'folder') {
+      node.append(el('span', 'value', draft[row.key] || 'Choose… (opens a picker, use the mouse)'));
     } else if (row.kind === 'text') {
       const input = el('input');
       input.type = 'text';
@@ -336,6 +427,8 @@ function activateRow() {
   const row = settingsRows[settingsIndex];
   if (row.kind === 'select' || row.kind === 'toggle') {
     changeRow(1);
+  } else if (row.kind === 'folder') {
+    send({ type: 'pickFolder', current: draft[row.key] });
   } else if (row.kind === 'text') {
     const input = els.settingsList.children[settingsIndex].querySelector('input');
     input.focus();
@@ -468,6 +561,7 @@ if (webview) {
     config: {
       homeHotkeys: ['BrowserHome'], gamepadHome: true, startWithWindows: false,
       audio: { deviceId: 'a', switchSystemDefault: true },
+      slideshow: { enabled: true, folder: null, intervalSeconds: 30 },
       apps: [
         { id: 'jellyfin', name: 'Jellyfin', type: 'web', url: 'http://localhost:8096', icon: 'jellyfin',
           description: 'Movies, shows and music from your library',

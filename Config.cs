@@ -7,6 +7,7 @@ public sealed class AppConfig
     public DisplaySettings Display { get; set; } = new();
     public AudioSettings Audio { get; set; } = new();
     public FirefoxSettings Firefox { get; set; } = new();
+    public SlideshowSettings Slideshow { get; set; } = new();
 
     /// <summary>Global hotkeys that close the running app and return to the launcher.</summary>
     public List<string> HomeHotkeys { get; set; } = ["BrowserHome", "Ctrl+Alt+Home"];
@@ -106,6 +107,19 @@ public sealed class AudioSettings
 
     /// <summary>Put the previous default output back when Jens-TV exits.</summary>
     public bool RestoreOnExit { get; set; } = true;
+}
+
+/// <summary>Photos from a folder shown as the launcher background.</summary>
+public sealed class SlideshowSettings
+{
+    public bool Enabled { get; set; } = true;
+    public string? Folder { get; set; }
+    public int IntervalSeconds { get; set; } = 30;
+    public bool Shuffle { get; set; } = true;
+    public bool IncludeSubfolders { get; set; } = true;
+
+    /// <summary>How much the photos are darkened behind the menu, 0 (not at all) to 1 (black).</summary>
+    public double Dim { get; set; } = 0.45;
 }
 
 public sealed class FirefoxSettings

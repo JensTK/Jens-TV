@@ -20,6 +20,10 @@ public sealed class MainWindow : Window
 {
     const string LauncherHost = "jenstv.local";
     const string LauncherUrl = $"https://{LauncherHost}/index.html";
+    const string PhotosHost = "jenstv-photos.local";
+    const int MaxSlideshowImages = 10_000;
+    static readonly HashSet<string> ImageExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif" };
 
     readonly WebView2 _web = new() { DefaultBackgroundColor = System.Drawing.Color.Black };
     readonly AudioSwitcher _audio = new();
@@ -38,6 +42,8 @@ public sealed class MainWindow : Window
     MonitorInfo? _target;
     bool _targetMatched = true;
     string? _injectedScriptId;
+    string? _mappedPhotoFolder;
+    bool _launcherReloading;
     string? _pendingToast;
     DateTime _ignoreConfigChangesUntil;
     bool _shutDown;
@@ -165,6 +171,7 @@ public sealed class MainWindow : Window
 
         _ = UpdateInjectedScriptAsync();
         SendState();
+        _ = SendSlideshowAsync();
     }
 
     void SaveConfig()
@@ -211,6 +218,12 @@ public sealed class MainWindow : Window
 
         if (Bool("switchAudio") is { } switchAudio)
             _config.Audio.SwitchSystemDefault = switchAudio;
+        if (Bool("slideshowEnabled") is { } slideshowEnabled)
+            _config.Slideshow.Enabled = slideshowEnabled;
+        if (s.TryGetProperty("slideshowFolder", out var folder) && folder.ValueKind is JsonValueKind.String or JsonValueKind.Null)
+            _config.Slideshow.Folder = string.IsNullOrWhiteSpace(folder.GetString()) ? null : folder.GetString();
+        if (s.TryGetProperty("slideshowInterval", out var interval) && interval.TryGetInt32(out var seconds) && seconds >= 5)
+            _config.Slideshow.IntervalSeconds = seconds;
         if (Bool("startWithWindows") is { } startWithWindows)
             _config.StartWithWindows = startWithWindows;
 
@@ -338,6 +351,7 @@ public sealed class MainWindow : Window
         };
 
         await UpdateInjectedScriptAsync();
+        UpdatePhotoMapping(); // must exist before the launcher loads
         core.Navigate(LauncherUrl);
     }
 
@@ -398,7 +412,9 @@ public sealed class MainWindow : Window
         switch (type)
         {
             case "ready":
+                _launcherReloading = false;
                 SendState();
+                _ = SendSlideshowAsync();
                 if (_pendingToast != null)
                 {
                     Toast(_pendingToast);
@@ -410,6 +426,9 @@ public sealed class MainWindow : Window
                 break;
             case "saveSettings":
                 SaveSettings(msg);
+                break;
+            case "pickFolder":
+                PickSlideshowFolder(msg.TryGetProperty("current", out var current) ? current.GetString() : null);
                 break;
             case "openConfig":
                 OpenConfigFile();
@@ -428,7 +447,7 @@ public sealed class MainWindow : Window
 
     void Toast(string text)
     {
-        if (IsLauncherShowing())
+        if (IsLauncherShowing() && !_launcherReloading)
             Post(new { type = "toast", text });
         else
             _pendingToast = text;
@@ -463,6 +482,89 @@ public sealed class MainWindow : Window
             running = _runner.RunningAppId,
             notices,
         });
+    }
+
+    // ---------------------------------------------------------------- background slideshow
+
+    /// <summary>Serves the photo folder to the launcher and sends it the list of images (scanned off the UI thread).</summary>
+    async Task SendSlideshowAsync()
+    {
+        var settings = _config.Slideshow;
+        if (_web.CoreWebView2 == null)
+            return;
+
+        // A changed mapping only applies to pages loaded after it, so reload; the new page asks again via "ready".
+        if (UpdatePhotoMapping() && IsLauncherShowing())
+        {
+            _launcherReloading = true;
+            _web.CoreWebView2.Reload();
+            return;
+        }
+
+        var folder = _mappedPhotoFolder;
+        var images = folder == null ? [] : await Task.Run(() => ScanImages(folder, settings.IncludeSubfolders));
+        Post(new
+        {
+            type = "slideshow",
+            images,
+            intervalSeconds = Math.Max(5, settings.IntervalSeconds),
+            settings.Shuffle,
+            dim = Math.Clamp(settings.Dim, 0, 1),
+        });
+    }
+
+    /// <summary>Serves the slideshow folder at https://jenstv-photos.local/. Returns true if the mapping changed.</summary>
+    bool UpdatePhotoMapping()
+    {
+        var settings = _config.Slideshow;
+        var folder = settings.Enabled && Directory.Exists(settings.Folder) ? Path.GetFullPath(settings.Folder!) : null;
+        if (folder == _mappedPhotoFolder)
+            return false;
+
+        var core = _web.CoreWebView2;
+        if (_mappedPhotoFolder != null)
+            core.ClearVirtualHostNameToFolderMapping(PhotosHost);
+        if (folder != null)
+            core.SetVirtualHostNameToFolderMapping(PhotosHost, folder, CoreWebView2HostResourceAccessKind.Allow);
+        _mappedPhotoFolder = folder;
+        return true;
+    }
+
+    static List<string> ScanImages(string folder, bool recursive)
+    {
+        try
+        {
+            var options = new EnumerationOptions
+            {
+                RecurseSubdirectories = recursive,
+                IgnoreInaccessible = true,
+                AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
+            };
+            return Directory.EnumerateFiles(folder, "*", options)
+                .Where(f => ImageExtensions.Contains(Path.GetExtension(f)))
+                .Take(MaxSlideshowImages)
+                .Select(f => $"https://{PhotosHost}/" +
+                    string.Join('/', Path.GetRelativePath(folder, f).Split(Path.DirectorySeparatorChar).Select(Uri.EscapeDataString)))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Scanning slideshow folder {folder} failed", ex);
+            return [];
+        }
+    }
+
+    /// <summary>Folder picker for the settings screen. Opens on the TV over the launcher; use a mouse.</summary>
+    void PickSlideshowFolder(string? current)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Choose a folder of photos for the Jens-TV background",
+            InitialDirectory = Directory.Exists(current) ? current : Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+        };
+        if (dialog.ShowDialog(this) == true)
+            Post(new { type = "folderPicked", path = dialog.FolderName });
+        _web.Focus();
     }
 
     // ---------------------------------------------------------------- apps
