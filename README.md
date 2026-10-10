@@ -18,7 +18,8 @@ dotnet publish -c Release -o publish   # self-contained folder you can point "St
 
 Requires Windows 10/11, the .NET 10 Desktop Runtime, the Edge WebView2 Runtime (preinstalled on Windows 11) and Firefox.
 
-First run: open **Settings** (last tile) and pick the TV display and sound output, then set the Jellyfin address.
+First run: open **Settings** (the gear in the top right: press Up from the tiles) and pick the TV display and sound
+output, then set the Jellyfin address.
 
 ## Controls
 
@@ -27,7 +28,7 @@ First run: open **Settings** (last tile) and pick the TV display and sound outpu
 | Move | Arrow keys | D-pad / left stick |
 | Open / select | Enter | A |
 | Back | Esc / Backspace | B |
-| Settings | Menu key | Start |
+| Settings | Up to the gear, then Enter; or Menu key | Up, then A; or Start |
 | **Return home from any app** | Home, media-keyboard Home, or Ctrl+Alt+Home | hold **Back + Start** |
 
 Returning home closes the running app (e.g. YouTube's Firefox) and brings the launcher back. The plain Home key
@@ -80,6 +81,7 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
   "tvHotkeys": ["Home"],                             // only while Jens-TV or its app is in front
   "gamepadHome": true,
   "startWithWindows": false,
+  "transparentTiles": false,      // logos without tile backgrounds; also a switch in Settings
   "apps": [
     { "id": "jellyfin", "name": "Jellyfin", "type": "web", "url": "http://localhost:8096", "icon": "jellyfin" },
     { "id": "youtube",  "name": "YouTube",  "type": "firefox", "url": "https://www.youtube.com/tv", "icon": "youtube" },
@@ -113,8 +115,10 @@ the same window back). Opening a different app still closes it.
 Spotify notes: the desktop app is built for mouse and keyboard rather than a remote (Space plays/pauses, Ctrl+L
 searches). The web player isn't used because the Firefox profile presents a TV user agent and Spotify needs DRM.
 
-Tile look: `icon` (`jellyfin`, `youtube`, an image URL, or empty for a letter), `background` (any CSS background),
-`accent` (glow colour) and `description`.
+Tile look: `icon` (`jellyfin`, `youtube`, `spotify`, an image URL, or empty for a letter), `background` (any CSS
+background), `accent` (glow colour) and `description`. With `transparentTiles` on, `background` isn't drawn: the logos
+sit directly on the photo/background with a soft shadow, and the focused app gets a frosted-glass panel. A custom
+icon should then be a logo with a transparent background (PNG, SVG or WebP) to look right.
 
 ## Files
 
