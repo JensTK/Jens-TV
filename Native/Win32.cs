@@ -133,7 +133,12 @@ internal static class Win32
 
     // --- Display config (monitor EDID names) ---
 
+    public const uint QDC_ALL_PATHS = 0x1;
     public const uint QDC_ONLY_ACTIVE_PATHS = 0x2;
+    public const uint SDC_TOPOLOGY_EXTEND = 0x4;
+    public const uint SDC_USE_SUPPLIED_DISPLAY_CONFIG = 0x20;
+    public const uint SDC_APPLY = 0x80;
+    public const uint SDC_ALLOW_CHANGES = 0x400;
     public const uint DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME = 1;
     public const uint DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME = 2;
 
@@ -165,7 +170,10 @@ internal static class Win32
         public uint flags;
     }
 
-    /// <summary>Contents unused; only the 64-byte size matters for QueryDisplayConfig.</summary>
+    /// <summary>
+    /// Only the header fields are declared, but the struct is blittable and 64 bytes, so the full mode data survives a
+    /// QueryDisplayConfig → SetDisplayConfig round trip untouched.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential, Size = 64)]
     public struct DISPLAYCONFIG_MODE_INFO { public uint infoType, id; public LUID adapterId; }
 
@@ -195,6 +203,43 @@ internal static class Win32
     [DllImport("user32.dll")]
     public static extern int QueryDisplayConfig(uint flags, ref uint numPaths, [Out] DISPLAYCONFIG_PATH_INFO[] paths,
         ref uint numModes, [Out] DISPLAYCONFIG_MODE_INFO[] modes, IntPtr topologyId);
+
+    // --- Display positions / primary display ---
+
+    public const int ENUM_CURRENT_SETTINGS = -1;
+    public const uint DM_POSITION = 0x20;
+    public const uint CDS_UPDATEREGISTRY = 0x1, CDS_SET_PRIMARY = 0x10, CDS_NORESET = 0x10000000;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct DEVMODE
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+        public ushort dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
+        public uint dmFields;
+        public int dmPositionX, dmPositionY; // display variant of the printer/display union
+        public uint dmDisplayOrientation, dmDisplayFixedOutput;
+        public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+        public ushort dmLogPixels;
+        public uint dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+        public uint dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool EnumDisplaySettings(string deviceName, int modeNum, ref DEVMODE devMode);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int ChangeDisplaySettingsEx(string deviceName, ref DEVMODE devMode, IntPtr hwnd, uint flags, IntPtr param);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int ChangeDisplaySettingsEx(string? deviceName, IntPtr devMode, IntPtr hwnd, uint flags, IntPtr param);
+
+    [DllImport("user32.dll")]
+    public static extern int SetDisplayConfig(uint numPaths, IntPtr paths, uint numModes, IntPtr modes, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern int SetDisplayConfig(uint numPaths, [In] DISPLAYCONFIG_PATH_INFO[] paths, uint numModes,
+        [In] DISPLAYCONFIG_MODE_INFO[] modes, uint flags);
 
     [DllImport("user32.dll")] public static extern int DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_SOURCE_DEVICE_NAME info);
     [DllImport("user32.dll")] public static extern int DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_TARGET_DEVICE_NAME info);

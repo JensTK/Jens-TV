@@ -95,6 +95,15 @@ public sealed class DisplaySettings
 
     /// <summary>When nothing is configured or found, prefer a non-primary display.</summary>
     public bool PreferNonPrimary { get; set; } = true;
+
+    /// <summary>
+    /// If the TV is connected but not part of the desktop ("Show only on 1"), switch Windows to Extend
+    /// (like Win+P → Extend). Tried once each time the TV connects.
+    /// </summary>
+    public bool AutoExtend { get; set; } = true;
+
+    /// <summary>When Jens-TV extended the desktop itself, put the previous display setup back on exit.</summary>
+    public bool RestoreOnExit { get; set; } = true;
 }
 
 public sealed class AudioSettings

@@ -21,6 +21,7 @@ public sealed class MainWindow : Window
     const string LauncherHost = "jenstv.local";
     const string LauncherUrl = $"https://{LauncherHost}/index.html";
     const string PhotosHost = "jenstv-photos.local";
+    const string InactivePrefix = "inactive:"; // settings value for a connected display that isn't extended
     const int MaxSlideshowImages = 10_000;
     static readonly HashSet<string> ImageExtensions =
         new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif" };
@@ -41,6 +42,9 @@ public sealed class MainWindow : Window
     IntPtr _hwnd;
     MonitorInfo? _target;
     bool _targetMatched = true;
+    bool _tvConnectedNotExtended;
+    string? _extendAttemptedFor;
+    DisplaySnapshot? _displayBeforeExtend; // set only when Jens-TV extended the desktop itself
     string? _injectedScriptId;
     string? _mappedPhotoFolder;
     bool _launcherReloading;
@@ -204,10 +208,20 @@ public sealed class MainWindow : Window
         bool? Bool(string name) =>
             s.TryGetProperty(name, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : null;
 
-        if (Str("monitorDevice") is { } device && Monitors.GetAll().FirstOrDefault(m => m.DeviceName == device) is { } monitor)
+        if (Str("monitorDevice") is { } device)
         {
-            _config.Display.MonitorDevice = monitor.DeviceName;
-            _config.Display.MonitorName = monitor.FriendlyName;
+            if (device.StartsWith(InactivePrefix, StringComparison.Ordinal))
+            {
+                // Connected but not extended yet: remember it by name; PlaceOnTarget extends the desktop.
+                _config.Display.MonitorName = device[InactivePrefix.Length..];
+                _config.Display.MonitorDevice = null;
+                _extendAttemptedFor = null;
+            }
+            else if (Monitors.GetAll().FirstOrDefault(m => m.DeviceName == device) is { } monitor)
+            {
+                _config.Display.MonitorDevice = monitor.DeviceName;
+                _config.Display.MonitorName = monitor.FriendlyName;
+            }
         }
 
         if (Str("audioDeviceId") is { } audioId && AudioDevices.List().FirstOrDefault(d => d.Id == audioId) is { } audioDevice)
@@ -267,6 +281,7 @@ public sealed class MainWindow : Window
             return;
 
         _target = Monitors.Resolve(monitors, _config.Display, out _targetMatched);
+        TryExtendToTv();
 
         if (WindowState == WindowState.Maximized &&
             string.Equals(Monitors.DeviceForWindow(_hwnd), _target.DeviceName, StringComparison.OrdinalIgnoreCase))
@@ -277,6 +292,36 @@ public sealed class MainWindow : Window
         WindowState = WindowState.Normal;
         Win32.SetWindowPos(_hwnd, IntPtr.Zero, b.X, b.Y, b.Width, b.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
         WindowState = WindowState.Maximized;
+    }
+
+    /// <summary>
+    /// The TV is plugged in and on, but Windows isn't using it (e.g. "Show only on 1"): switch to Extend. The
+    /// resulting display change re-runs PlaceOnTarget, which then finds the TV. Only tried once per connection so
+    /// we don't fight someone deliberately switching back.
+    /// </summary>
+    void TryExtendToTv()
+    {
+        var name = _config.Display.MonitorName;
+        if (_targetMatched || string.IsNullOrEmpty(name))
+        {
+            _extendAttemptedFor = null; // TV in use (or none configured): allow a new attempt next time it connects
+            _tvConnectedNotExtended = false;
+            return;
+        }
+
+        _tvConnectedNotExtended = Monitors.GetConnectedInactive().Contains(name);
+        if (!_tvConnectedNotExtended)
+        {
+            _extendAttemptedFor = null; // TV unplugged or off
+            return;
+        }
+
+        if (!_config.Display.AutoExtend || _extendAttemptedFor == name)
+            return;
+        _extendAttemptedFor = name;
+        Log.Info($"{name} is connected but not part of the desktop; extending");
+        // Keep the earliest snapshot: if the TV drops out and gets re-extended, that's still the original setup.
+        _displayBeforeExtend ??= Monitors.ExtendDesktop();
     }
 
     void BringToFront()
@@ -465,7 +510,12 @@ public sealed class MainWindow : Window
         if (_configError != null)
             notices.Add("config.json has an error, using defaults");
         if (!_targetMatched && _target != null)
-            notices.Add($"TV display \"{_config.Display.MonitorName ?? _config.Display.MonitorDevice}\" not found, showing on {_target.FriendlyName}");
+        {
+            var tvName = _config.Display.MonitorName ?? _config.Display.MonitorDevice;
+            notices.Add(_tvConnectedNotExtended
+                ? $"TV \"{tvName}\" is connected but not extended. Press Win+P and choose Extend"
+                : $"TV display \"{tvName}\" not found, showing on {_target.FriendlyName}");
+        }
         if (_config.Audio.SwitchSystemDefault && _config.Audio.DeviceId != null && audioDevices.All(d => d.Id != _config.Audio.DeviceId))
             notices.Add($"Sound device \"{_config.Audio.DeviceName}\" not connected");
         var failedKeys = _hotkeys.Failed.Concat(_tvKeys.Failed).ToList();
@@ -476,7 +526,15 @@ public sealed class MainWindow : Window
         {
             type = "state",
             config = _config,
-            monitors = monitors.Select(m => new { device = m.DeviceName, name = m.FriendlyName, label = m.Label, primary = m.IsPrimary }),
+            monitors = monitors
+                .Select(m => new { device = m.DeviceName, name = m.FriendlyName, label = m.Label, primary = m.IsPrimary })
+                .Concat(Monitors.GetConnectedInactive().Distinct().Select(name => new
+                {
+                    device = InactivePrefix + name,
+                    name,
+                    label = $"{name} · connected, not extended (Jens-TV will extend)",
+                    primary = false,
+                })),
             targetMonitor = _target?.DeviceName,
             audioDevices = audioDevices.Select(d => new { id = d.Id, name = d.Name, isDefault = d.IsDefault }),
             running = _runner.RunningAppId,
@@ -646,5 +704,8 @@ public sealed class MainWindow : Window
         _audioWatcher?.Dispose();
         if (_config.Audio.RestoreOnExit)
             _audio.Restore();
+        // Displays last: switching the TV off the desktop also removes its HDMI audio device.
+        if (_config.Display.RestoreOnExit && _displayBeforeExtend != null)
+            Monitors.RestoreDisplayConfig(_displayBeforeExtend);
     }
 }
