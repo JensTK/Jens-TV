@@ -53,20 +53,35 @@ public sealed class AppConfig
         ],
     };
 
-    /// <summary>The Spotify desktop app (Store or classic installer both handle the spotify: URI).</summary>
+    /// <summary>
+    /// The Spotify desktop app. Launched in a way that accepts arguments (needed for zoom) when possible: by Store app
+    /// ID or the classic installer's exe; otherwise via the spotify: URI, which ignores arguments.
+    /// </summary>
     public static AppEntry Spotify() => new()
     {
         Id = "spotify",
         Name = "Spotify",
         Type = "exe",
-        Path = "spotify:",
+        Path = FindSpotify(),
         ProcessName = "Spotify",
         Maximize = true,
+        Zoom = 1.5,
         Icon = "spotify",
         Description = "Music and podcasts",
         Background = "linear-gradient(160deg, #1f1f1f 0%, #0b0b0b 100%)",
         Accent = "#145c32",
     };
+
+    static string FindSpotify()
+    {
+        const string storePackage = "SpotifyAB.SpotifyMusic_zpdnekdrzrea0";
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (Directory.Exists(System.IO.Path.Combine(local, "Packages", storePackage)))
+            return $@"shell:AppsFolder\{storePackage}!Spotify";
+
+        var classic = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Spotify", "Spotify.exe");
+        return File.Exists(classic) ? classic : "spotify:";
+    }
 }
 
 public sealed class DisplaySettings
@@ -138,6 +153,12 @@ public sealed class AppEntry
 
     /// <summary>exe apps: maximize the window on the TV.</summary>
     public bool Maximize { get; set; }
+
+    /// <summary>
+    /// exe apps built on Chromium/Electron (Spotify, Discord …): interface size relative to normal on the TV,
+    /// e.g. 1.5 = 150 %. Applied per launch, so the app's normal size elsewhere is unaffected.
+    /// </summary>
+    public double? Zoom { get; set; }
 
     /// <summary>
     /// exe apps: track the app by process name (without .exe). Needed for Store apps and URIs, which the shell starts

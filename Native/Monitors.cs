@@ -62,6 +62,15 @@ public static class Monitors
             ?? all[0];
     }
 
+    /// <summary>The Windows display scaling of a monitor (1.0 = 100 %, 1.5 = 150 % …).</summary>
+    public static double GetScale(MonitorInfo monitor)
+    {
+        var b = monitor.Bounds;
+        var center = new Win32.POINT { X = b.X + b.Width / 2, Y = b.Y + b.Height / 2 };
+        var handle = Win32.MonitorFromPoint(center, Win32.MONITOR_DEFAULTTONEAREST);
+        return Win32.GetDpiForMonitor(handle, 0 /* MDT_EFFECTIVE_DPI */, out var dpi, out _) == 0 ? dpi / 96.0 : 1.0;
+    }
+
     public static string? DeviceForWindow(IntPtr hwnd)
     {
         var handle = Win32.MonitorFromWindow(hwnd, Win32.MONITOR_DEFAULTTONEAREST);

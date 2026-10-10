@@ -11,7 +11,7 @@ public sealed class ExternalAppRunner
 {
     Process? _process;
     AppEntry? _app;
-    ProcessStartInfo? _startInfo;
+    Func<Process?>? _relaunch;
     CancellationTokenSource? _placement;
     int _generation;
 
@@ -50,7 +50,8 @@ public sealed class ExternalAppRunner
         if (!string.IsNullOrWhiteSpace(app.Url))
             args.Add(app.Url);
 
-        Start(app, new ProcessStartInfo(exe, args) { UseShellExecute = false }, target);
+        var psi = new ProcessStartInfo(exe, args) { UseShellExecute = false };
+        Start(app, () => Process.Start(psi), target);
     }
 
     public void StartExe(AppEntry app, MonitorInfo? target)
@@ -58,22 +59,39 @@ public sealed class ExternalAppRunner
         if (string.IsNullOrWhiteSpace(app.Path))
             throw new InvalidOperationException("No path configured.");
 
-        // Non-.exe paths (shortcuts, Store apps, spotify:/steam:// URIs) go through the shell.
-        var isExe = app.Path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
-        var psi = new ProcessStartInfo(app.Path) { UseShellExecute = !isExe, Arguments = app.Args ?? "" };
-        if (isExe)
-            psi.WorkingDirectory = System.IO.Path.GetDirectoryName(app.Path) ?? "";
-        Start(app, psi, app.MoveToTv ? target : null);
+        var args = app.Args ?? "";
+        if (app.Zoom is > 0 and var zoom)
+        {
+            // Chromium's flag replaces Windows scaling rather than multiplying it, so fold the TV's scaling in.
+            var scale = zoom * (target != null ? Monitors.GetScale(target) : 1.0);
+            args = $"{args} --force-device-scale-factor={scale.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}".Trim();
+        }
+
+        Func<Process?> launch;
+        if (StoreApps.GetAppId(app.Path) is { } appId)
+        {
+            launch = () => StoreApps.Activate(appId, args);
+        }
+        else
+        {
+            // Non-.exe paths (shortcuts, spotify:/steam:// URIs) go through the shell.
+            var isExe = app.Path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+            var psi = new ProcessStartInfo(Environment.ExpandEnvironmentVariables(app.Path)) { UseShellExecute = !isExe, Arguments = args };
+            if (isExe)
+                psi.WorkingDirectory = System.IO.Path.GetDirectoryName(psi.FileName) ?? "";
+            launch = () => Process.Start(psi);
+        }
+        Start(app, launch, app.MoveToTv ? target : null);
     }
 
-    void Start(AppEntry app, ProcessStartInfo psi, MonitorInfo? target)
+    void Start(AppEntry app, Func<Process?> launch, MonitorInfo? target)
     {
         Stop();
         var generation = _generation;
         Win32.AllowSetForegroundWindow(Win32.ASFW_ANY);
 
-        var started = Process.Start(psi);
-        _startInfo = psi;
+        var started = launch();
+        _relaunch = launch;
         if (!string.IsNullOrWhiteSpace(app.ProcessName))
         {
             // The shell (or an already-running instance) owns the real process; find it by name.
@@ -151,10 +169,10 @@ public sealed class ExternalAppRunner
             return;
 
         var windows = WindowFinder.TopLevelWindows(ProcessTree.Get(process.Id));
-        if (windows.Count == 0 && _startInfo != null)
+        if (windows.Count == 0 && _relaunch != null)
         {
             // Hidden in the tray: launching again makes single-instance apps show their window.
-            Process.Start(_startInfo)?.Dispose();
+            _relaunch()?.Dispose();
         }
         else
         {

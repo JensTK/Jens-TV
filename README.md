@@ -70,8 +70,9 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
     { "id": "jellyfin", "name": "Jellyfin", "type": "web", "url": "http://localhost:8096", "icon": "jellyfin" },
     { "id": "youtube",  "name": "YouTube",  "type": "firefox", "url": "https://www.youtube.com/tv", "icon": "youtube" },
 
-    { "id": "spotify",  "name": "Spotify",  "type": "exe", "path": "spotify:", "processName": "Spotify",
-      "maximize": true, "icon": "spotify" },
+    { "id": "spotify",  "name": "Spotify",  "type": "exe", "processName": "Spotify",
+      "path": "shell:AppsFolder\\SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify",   // Store app; or the classic Spotify.exe path
+      "maximize": true, "zoom": 1.5, "icon": "spotify" },
 
     // more examples:
     { "id": "steam", "name": "Steam", "type": "exe", "path": "steam://open/bigpicture",
@@ -88,7 +89,9 @@ App types:
 - `firefox`: opens the URL in the Jens-TV Firefox profile, fullscreen on the TV.
 - `exe`: starts a program (`path` + `args`). Non-`.exe` paths (shortcuts, Store apps, URIs) go through the shell; set
   `processName` (without `.exe`) so Jens-TV can find the real process, move it and close it. `moveToTv` moves the
-  window to the TV, `maximize` maximizes it there.
+  window to the TV, `maximize` maximizes it there. `path` can also be `shell:AppsFolder\<AppID>` for a Store app
+  (find the ID with PowerShell `Get-StartApps`), which, unlike a URI, passes `args` through. `zoom` (e.g. `1.5`)
+  enlarges Chromium/Electron apps such as Spotify for that launch only, on top of the TV's Windows scaling.
 
 Any app: `closeOnHome: false` leaves it running when you go home (the tile shows "Running"; opening it again brings
 the same window back). Opening a different app still closes it.

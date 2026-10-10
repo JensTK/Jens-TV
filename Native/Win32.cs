@@ -27,6 +27,9 @@ internal static class Win32
         public readonly int Height => Bottom - Top;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT { public int X, Y; }
+
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct MONITORINFOEX
     {
@@ -43,6 +46,8 @@ internal static class Win32
     [DllImport("user32.dll")] public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc proc, IntPtr data);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX info);
     [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+    [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT point, uint flags);
+    [DllImport("shcore.dll")] public static extern int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint dpiX, out uint dpiY);
 
     [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc proc, IntPtr lParam);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
