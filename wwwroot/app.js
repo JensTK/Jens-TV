@@ -27,6 +27,10 @@ const ICONS = {
         <path d="M31.5 67c11-3.2 22-2.4 32 2.8" stroke-width="5.5"/>
       </g>
     </svg>`,
+  f1tv: `<svg class="f1tv-logo" viewBox="0 0 120 60" aria-hidden="true">
+      <text x="60" y="44" text-anchor="middle" fill="#fff" font-family="Segoe UI, sans-serif" font-size="40"
+        font-weight="900" font-style="italic" letter-spacing="-1">F1 TV</text>
+    </svg>`,
 };
 
 const POWER_ICON = `<svg viewBox="0 0 100 100" aria-hidden="true">

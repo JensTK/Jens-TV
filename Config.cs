@@ -60,7 +60,25 @@ public sealed class AppConfig
                 Accent = "#7a1020",
             },
             Spotify(),
+            F1Tv(),
         ],
+    };
+
+    /// <summary>
+    /// F1 TV's website inside Jens-TV (WebView2 has Widevine and PlayReady). Not Firefox: F1 blocks it, and its login
+    /// API rejects Firefox even with Mozilla's Chrome disguise (403 from bot protection).
+    /// </summary>
+    public static AppEntry F1Tv() => new()
+    {
+        Id = "f1tv",
+        Name = "F1 TV",
+        Type = "web",
+        Url = "https://f1tv.formula1.com/",
+        ForceTvLayout = false,
+        Icon = "f1tv",
+        Description = "Formula 1 live timing, races and replays",
+        Background = "linear-gradient(160deg, #ff1e00 0%, #b80500 100%)",
+        Accent = "#6b0d08",
     };
 
     /// <summary>
@@ -188,6 +206,15 @@ public sealed class AppEntry
 
     /// <summary>exe apps: move the program's window onto the TV display.</summary>
     public bool MoveToTv { get; set; } = true;
+
+    /// <summary>
+    /// firefox apps: use a separate Firefox profile with this name instead of the shared one (which has the TV user
+    /// agent for YouTube and firefox.extensions). Logins and settings stay in that profile.
+    /// </summary>
+    public string? Profile { get; set; }
+
+    /// <summary>firefox apps with their own <see cref="Profile"/>: user agent override; empty = Firefox's real one.</summary>
+    public string? UserAgent { get; set; }
 
     /// <summary>exe apps: maximize the window on the TV.</summary>
     public bool Maximize { get; set; }

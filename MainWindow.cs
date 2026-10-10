@@ -49,7 +49,7 @@ public sealed class MainWindow : Window
     string? _mappedPhotoFolder;
     bool _launcherReloading;
     string? _launchHotkeyError;
-    Task? _extensionSync;
+    Task? _firefoxPrep;
     List<string> _failedExtensions = [];
     string? _pendingToast;
     DateTime _ignoreConfigChangesUntil;
@@ -176,7 +176,7 @@ public sealed class MainWindow : Window
             Log.Error("Updating start-with-Windows failed", ex);
         }
 
-        StartExtensionSync();
+        PrepareFirefoxProfiles();
 
         _launchHotkeyError = null;
         try
@@ -647,22 +647,26 @@ public sealed class MainWindow : Window
         _web.Focus();
     }
 
-    // ---------------------------------------------------------------- Firefox add-ons
+    // ---------------------------------------------------------------- Firefox profiles and add-ons
 
-    /// <summary>Installs/removes firefox.extensions in the background so they're ready before YouTube is opened.</summary>
-    void StartExtensionSync()
+    /// <summary>
+    /// Background setup so Firefox apps open ready to use: syncs firefox.extensions into the shared profile, and gives
+    /// brand-new app profiles (e.g. F1 TV's) an invisible first run so Firefox finishes first-run setup and downloads
+    /// the Widevine DRM component before the app is opened.
+    /// </summary>
+    void PrepareFirefoxProfiles()
     {
-        // The profile is in use while a Firefox app runs; the next config apply or start catches up.
+        // Profiles are in use while a Firefox app runs; the next config apply or start catches up.
         var firefoxRunning = _config.Apps.Any(a => a.Id == _runner.RunningAppId && a.Type == "firefox");
-        if (firefoxRunning || _extensionSync is { IsCompleted: false })
+        if (firefoxRunning || _firefoxPrep is { IsCompleted: false })
             return;
         if (FirefoxSupport.FindExecutable(_config.Firefox.Path) is not { } exe)
             return;
 
-        _extensionSync = RunExtensionSyncAsync(exe, _config.Firefox);
+        _firefoxPrep = PrepareFirefoxProfilesAsync(exe, _config.Firefox);
     }
 
-    async Task RunExtensionSyncAsync(string exe, FirefoxSettings settings)
+    async Task PrepareFirefoxProfilesAsync(string exe, FirefoxSettings settings)
     {
         try
         {
@@ -672,6 +676,25 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             Log.Error("Syncing Firefox add-ons failed", ex);
+        }
+
+        foreach (var app in _config.Apps.Where(a => a.Type == "firefox" && !string.IsNullOrWhiteSpace(a.Profile)))
+        {
+            try
+            {
+                var dir = FirefoxSupport.ProfileDirFor(app);
+                var isNew = !File.Exists(Path.Combine(dir, "prefs.js")); // Firefox writes prefs.js on its first run
+                FirefoxSupport.PrepareProfile(settings, app);
+                if (isNew)
+                {
+                    Log.Info($"First run of the Firefox profile for {app.Name}");
+                    await FirefoxExtensions.WarmUpAsync(exe, dir, seconds: 25);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Preparing the Firefox profile for {app.Name} failed", ex);
+            }
         }
         SendState();
     }
@@ -687,9 +710,9 @@ public sealed class MainWindow : Window
         try
         {
             // Firefox can't start on the profile while add-ons are being installed into it.
-            if (app.Type.Equals("firefox", StringComparison.OrdinalIgnoreCase) && _extensionSync is { IsCompleted: false } sync)
+            if (app.Type.Equals("firefox", StringComparison.OrdinalIgnoreCase) && _firefoxPrep is { IsCompleted: false } sync)
             {
-                Toast("Getting Firefox add-ons ready…");
+                Toast("Getting Firefox ready…");
                 await sync;
             }
 

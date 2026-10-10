@@ -41,7 +41,7 @@ public sealed class ExternalAppRunner
     {
         var exe = FirefoxSupport.FindExecutable(firefox.Path)
             ?? throw new InvalidOperationException("Firefox was not found. Set firefox.path in the config.");
-        var profile = FirefoxSupport.PrepareProfile(firefox);
+        var profile = FirefoxSupport.PrepareProfile(firefox, app);
 
         // -wait-for-browser keeps the launcher process alive until the browser exits, so we can track it.
         var args = new List<string> { "-no-remote", "-wait-for-browser", "-profile", profile };
@@ -293,14 +293,29 @@ public static class FirefoxSupport
     /// <summary>A dedicated profile so the TV user agent and kiosk prefs don't touch your everyday Firefox.</summary>
     public static readonly string ProfileDir = System.IO.Path.Combine(AppPaths.Local, "firefox-profile");
 
-    public static string PrepareProfile(FirefoxSettings settings)
+    /// <summary>
+    /// The shared profile (YouTube, with the TV user agent and firefox.extensions), or an app's own profile when it
+    /// sets <see cref="AppEntry.Profile"/>.
+    /// </summary>
+    public static string ProfileDirFor(AppEntry? app)
     {
-        var dir = ProfileDir;
+        if (string.IsNullOrWhiteSpace(app?.Profile))
+            return ProfileDir;
+        var safeName = new string(app.Profile.Where(c => char.IsLetterOrDigit(c) || c is '-' or '_').ToArray());
+        return System.IO.Path.Combine(AppPaths.Local, $"firefox-profile-{safeName.ToLowerInvariant()}");
+    }
+
+    /// <summary>Writes the profile's user.js. Returns the profile folder.</summary>
+    public static string PrepareProfile(FirefoxSettings settings, AppEntry? app = null)
+    {
+        var dir = ProfileDirFor(app);
         Directory.CreateDirectory(dir);
+
+        // The shared profile always uses firefox.userAgent; own profiles use the app's, or Firefox's real one.
+        var userAgent = string.IsNullOrWhiteSpace(app?.Profile) ? settings.UserAgent : app.UserAgent;
 
         var prefs = new Dictionary<string, object>
         {
-            ["general.useragent.override"] = settings.UserAgent,
             ["browser.shell.checkDefaultBrowser"] = false,
             ["browser.sessionstore.resume_from_crash"] = false,
             ["browser.startup.homepage_override.mstone"] = "ignore",
@@ -316,7 +331,13 @@ public static class FirefoxSupport
             // Enable add-ons placed in the profile's extensions folder (firefox.extensions) without the
             // "allow this add-on?" prompt; the default (15) also auto-disables the profile scope (1).
             ["extensions.autoDisableScopes"] = 14,
+            // Copy-protected video (F1 TV and similar): DRM on, Widevine allowed, no "enable DRM?" bar in kiosk mode.
+            ["media.eme.enabled"] = true,
+            ["media.gmp-widevinecdm.enabled"] = true,
+            ["media.gmp-widevinecdm.visible"] = true,
         };
+        if (!string.IsNullOrWhiteSpace(userAgent))
+            prefs["general.useragent.override"] = userAgent;
         foreach (var (name, value) in settings.ExtraPrefs)
             prefs[name] = value;
 

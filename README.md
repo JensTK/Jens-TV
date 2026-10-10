@@ -6,6 +6,7 @@ It runs fullscreen on the TV, is driven by keyboard, remote or gamepad, and laun
 - **Jellyfin** inside the TV window (Jellyfin's web client, forced into its TV layout)
 - **YouTube** via `youtube.com/tv` in a dedicated Firefox kiosk window placed on the TV
 - **Spotify** desktop app, maximized on the TV
+- **F1 TV** website inside the TV window (WebView2 has the Widevine/PlayReady DRM it needs; F1 blocks Firefox)
 - anything else you add (programs, shortcuts, `steam://` URIs, other web apps)
 
 ## Run
@@ -75,13 +76,13 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
 {
   "display": { "monitorName": "LG TV SSCR2", "monitorDevice": "\\\\.\\DISPLAY2", "preferNonPrimary": true,
                "autoExtend": true, "restoreOnExit": true },
-  "audio":   { "deviceId": "{0.0.0.00000000}.{…}", "deviceName": "LG TV (NVIDIA High Definition Audio)",
+  "audio":   { "deviceId": "{0.0.0.00000000}.{â€¦}", "deviceName": "LG TV (NVIDIA High Definition Audio)",
                "switchSystemDefault": true, "restoreOnExit": true },
   "firefox": {
     "path": null,                 // auto-detected
     "kiosk": true,
     "extensions": ["sponsorblock"],   // addons.mozilla.org names, YouTube profile only
-    "userAgent": "…",             // must look like a TV/console for youtube.com/tv
+    "userAgent": "â€¦",             // must look like a TV/console for youtube.com/tv
     "extraPrefs": { "media.hardware-video-decoding.force-enabled": true }
   },
   "slideshow": {                  // photos behind the launcher; folder can also be picked in Settings
@@ -107,6 +108,8 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
     { "id": "steam", "name": "Steam", "type": "exe", "path": "steam://open/bigpicture",
       "background": "linear-gradient(160deg,#1b2838,#2a475e)", "accent": "#1b3a5c" },
     { "id": "kodi", "name": "Kodi", "type": "exe", "path": "C:\\Program Files\\Kodi\\kodi.exe", "moveToTv": true },
+    { "id": "f1tv", "name": "F1 TV", "type": "web", "url": "https://f1tv.formula1.com/", "forceTvLayout": false,
+      "icon": "f1tv" },
     { "id": "nrk", "name": "NRK TV", "type": "firefox", "url": "https://tv.nrk.no" }
   ]
 }
@@ -115,7 +118,9 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
 App types:
 
 - `web`: opens inside the TV window. `forceTvLayout` (default true) sets Jellyfin's TV layout.
-- `firefox`: opens the URL in the Jens-TV Firefox profile, fullscreen on the TV.
+- `firefox`: opens the URL in the Jens-TV Firefox profile, fullscreen on the TV. `profile` gives the app its own
+  Firefox profile (own logins, no TV user agent, no `firefox.extensions`); `userAgent` optionally overrides the user
+  agent there. New profiles get an invisible first run in the background so Firefox can download Widevine (DRM).
 - `exe`: starts a program (`path` + `args`). Non-`.exe` paths (shortcuts, Store apps, URIs) go through the shell; set
   `processName` (without `.exe`) so Jens-TV can find the real process, move it and close it. `moveToTv` moves the
   window to the TV, `maximize` maximizes it there. `path` can also be `shell:AppsFolder\<AppID>` for a Store app
@@ -128,7 +133,7 @@ the same window back). Opening a different app still closes it.
 Spotify notes: the desktop app is built for mouse and keyboard rather than a remote (Space plays/pauses, Ctrl+L
 searches). The web player isn't used because the Firefox profile presents a TV user agent and Spotify needs DRM.
 
-Tile look: `icon` (`jellyfin`, `youtube`, `spotify`, an image URL, or empty for a letter), `background` (any CSS
+Tile look: `icon` (`jellyfin`, `youtube`, `spotify`, `f1tv`, an image URL, or empty for a letter), `background` (any CSS
 background), `accent` (glow colour) and `description`. With `transparentTiles` on, `background` isn't drawn: the logos
 sit directly on the photo/background with a soft shadow, and the focused app gets a frosted-glass panel. A custom
 icon should then be a logo with a transparent background (PNG, SVG or WebP) to look right.

@@ -81,7 +81,8 @@ public static class FirefoxExtensions
         return failed;
     }
 
-    static async Task WarmUpAsync(string firefoxExe, string profileDir)
+    /// <summary>Runs Firefox invisibly on a profile for a while (first-run setup, add-on installs, DRM download).</summary>
+    public static async Task WarmUpAsync(string firefoxExe, string profileDir, int seconds = 12)
     {
         try
         {
@@ -89,7 +90,7 @@ public static class FirefoxExtensions
                 ["-headless", "-no-remote", "-profile", profileDir, "about:blank"]) { UseShellExecute = false });
             if (process == null)
                 return;
-            await Task.Delay(TimeSpan.FromSeconds(12));
+            await Task.Delay(TimeSpan.FromSeconds(seconds));
             if (!process.HasExited)
                 process.Kill(entireProcessTree: true);
         }

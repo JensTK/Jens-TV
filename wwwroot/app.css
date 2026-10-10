@@ -253,6 +253,11 @@ body.transparent-tiles .tile-wrap.focused .tile {
 body.transparent-tiles .tile-wrap.focused .tile svg { width: 52%; }
 /* Without its gradient tile, Jellyfin's logo gets the brand gradient itself. */
 body.transparent-tiles .jellyfin-logo path { fill: url(#jellyfin-gradient); }
+body.transparent-tiles .f1tv-logo text { fill: #ff1e00; }
+/* Wide wordmark: give it more room than square logos. */
+.tile .f1tv-logo { width: 62%; }
+body.transparent-tiles .tile .f1tv-logo { width: 70%; }
+body.transparent-tiles .tile-wrap.focused .tile .f1tv-logo { width: 76%; }
 
 .hint {
   position: absolute;
