@@ -1,5 +1,5 @@
 // Injected by Jens-TV into every page shown inside the TV window except the launcher itself (Jellyfin, F1 TV …).
-// __TV_ORIGINS__ is replaced with a JSON array of Jellyfin origins (web apps with forceTvLayout).
+// Jens-TV fills in tvOrigins below: a JSON array of Jellyfin origins (web apps with forceTvLayout).
 (() => {
   if (location.hostname === 'jenstv.local' || !window.chrome || !window.chrome.webview) return;
 

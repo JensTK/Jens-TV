@@ -6,7 +6,8 @@ It runs fullscreen on the TV, is driven by keyboard, remote or gamepad, and laun
 - **Jellyfin** inside the TV window (Jellyfin's web client, forced into its TV layout)
 - **YouTube** via `youtube.com/tv` in a dedicated Firefox kiosk window placed on the TV
 - **Spotify** desktop app, maximized on the TV
-- **F1 TV** website inside the TV window (WebView2 has the Widevine/PlayReady DRM it needs; F1 blocks Firefox)
+- **F1 TV** website inside the TV window (WebView2 has the Widevine/PlayReady DRM it needs; F1 blocks Firefox),
+  navigable with arrow keys
 - anything else you add (programs, shortcuts, `steam://` URIs, other web apps)
 
 ## Run
@@ -113,7 +114,7 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
       "background": "linear-gradient(160deg,#1b2838,#2a475e)", "accent": "#1b3a5c" },
     { "id": "kodi", "name": "Kodi", "type": "exe", "path": "C:\\Program Files\\Kodi\\kodi.exe", "moveToTv": true },
     { "id": "f1tv", "name": "F1 TV", "type": "web", "url": "https://f1tv.formula1.com/", "forceTvLayout": false,
-      "icon": "f1tv" },
+      "spatialNavigation": true, "icon": "f1tv" },
     { "id": "nrk", "name": "NRK TV", "type": "firefox", "url": "https://tv.nrk.no" }
   ]
 }
@@ -121,7 +122,10 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
 
 App types:
 
-- `web`: opens inside the TV window. `forceTvLayout` (default true) sets Jellyfin's TV layout.
+- `web`: opens inside the TV window. `forceTvLayout` (default true) sets Jellyfin's TV layout. `spatialNavigation`
+  makes a mouse-oriented site usable with a remote: arrow keys move a white highlight to the nearest link or button,
+  Enter clicks, Back goes back, Right/Left at the end of a carousel row presses its Next/Previous arrow, and Down
+  keeps going into rows that load as you scroll. Arrows are left to the site in fullscreen video and text fields.
 - `firefox`: opens the URL in the Jens-TV Firefox profile, fullscreen on the TV. `profile` gives the app its own
   Firefox profile (own logins, no TV user agent, no `firefox.extensions`); `userAgent` optionally overrides the user
   agent there. New profiles get an invisible first run in the background so Firefox can download Widevine (DRM).

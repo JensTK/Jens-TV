@@ -75,6 +75,7 @@ public sealed class AppConfig
         Type = "web",
         Url = "https://f1tv.formula1.com/",
         ForceTvLayout = false,
+        SpatialNavigation = true,
         Icon = "f1tv",
         Description = "Formula 1 live timing, races and replays",
         Background = "linear-gradient(160deg, #ff1e00 0%, #b80500 100%)",
@@ -209,6 +210,11 @@ public sealed class AppEntry
 
     /// <summary>web apps: force Jellyfin's TV layout.</summary>
     public bool ForceTvLayout { get; set; } = true;
+
+    /// <summary>
+    /// web apps built for a mouse: arrow keys move a highlight between links and buttons, Enter clicks, Back goes back.
+    /// </summary>
+    public bool SpatialNavigation { get; set; }
 
     /// <summary>exe apps: move the program's window onto the TV display.</summary>
     public bool MoveToTv { get; set; } = true;

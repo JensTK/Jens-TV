@@ -49,6 +49,7 @@ public sealed class MainWindow : Window
     bool _screensTurnedOff;
     bool _refocusAfterDisplayChange;
     string? _injectedScriptId;
+    string? _spatnavScriptId;
     string? _mappedPhotoFolder;
     bool _launcherReloading;
     string? _launchHotkeyError;
@@ -485,17 +486,29 @@ public sealed class MainWindow : Window
 
         try
         {
-            if (_injectedScriptId != null)
-                core.RemoveScriptToExecuteOnDocumentCreated(_injectedScriptId);
+            foreach (var id in new[] { _injectedScriptId, _spatnavScriptId })
+                if (id != null)
+                    core.RemoveScriptToExecuteOnDocumentCreated(id);
+            _injectedScriptId = _spatnavScriptId = null;
 
-            var tvOrigins = _config.Apps
-                .Where(a => a.Type == "web" && a.ForceTvLayout && Uri.IsWellFormedUriString(a.Url, UriKind.Absolute))
+            string[] OriginsOf(Func<AppEntry, bool> filter) => _config.Apps
+                .Where(a => a.Type == "web" && filter(a) && Uri.IsWellFormedUriString(a.Url, UriKind.Absolute))
                 .Select(a => new Uri(a.Url!).GetLeftPart(UriPartial.Authority))
                 .ToArray();
+            var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
 
-            var template = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "wwwroot", "inject.js"));
-            var script = template.Replace("__TV_ORIGINS__", JsonSerializer.Serialize(tvOrigins));
+            var template = await File.ReadAllTextAsync(Path.Combine(wwwroot, "inject.js"));
+            var script = template.Replace("__TV_ORIGINS__", JsonSerializer.Serialize(OriginsOf(a => a.ForceTvLayout)));
             _injectedScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(script);
+
+            // Remote navigation for mouse-only sites, only when some app wants it.
+            var spatnavOrigins = OriginsOf(a => a.SpatialNavigation);
+            if (spatnavOrigins.Length > 0)
+            {
+                var spatnav = (await File.ReadAllTextAsync(Path.Combine(wwwroot, "spatnav.js")))
+                    .Replace("__SPATNAV_ORIGINS__", JsonSerializer.Serialize(spatnavOrigins));
+                _spatnavScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(spatnav);
+            }
         }
         catch (Exception ex)
         {
