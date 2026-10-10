@@ -55,8 +55,12 @@ Pressing Back on Jellyfin's home screen also returns to the launcher.
 - **Sound**: while Jens-TV runs, the chosen device becomes the Windows default output (so Jellyfin, Firefox and
   everything else play through the TV). The previous default comes back when Jens-TV exits. You can turn this off in Settings.
 - **YouTube**: Firefox starts with its own profile in `%LOCALAPPDATA%\JensTV\firefox-profile` and a TV user agent, so
-  your everyday Firefox and its settings stay untouched. To install add-ons like uBlock Origin or SponsorBlock into
-  that profile, set `firefox.kiosk` to `false`, open YouTube from the launcher, install them, then set it back.
+  your everyday Firefox and its settings stay untouched.
+- **Firefox add-ons**: list them in `firefox.extensions` by their addons.mozilla.org name (the end of
+  `addons.mozilla.org/firefox/addon/<name>`), e.g. `["sponsorblock", "ublock-origin"]`. Jens-TV downloads them into
+  the YouTube profile only, enables them without a prompt, and lets Firefox start once invisibly so welcome pages don't
+  cover YouTube. Firefox keeps them updated; removing a name uninstalls it. SponsorBlock is tested working on
+  youtube.com/tv. To change an add-on's own settings, set `firefox.kiosk` to `false` temporarily to get the toolbar.
 - **Jellyfin**: runs in WebView2; logins persist in `%LOCALAPPDATA%\JensTV\WebView2`.
 - **Background slideshow**: choose a photo folder in Settings (the picker opens on the TV; use a mouse). Photos
   (jpg, png, webp, gif, bmp, avif, including subfolders) crossfade behind the menu with a slow zoom, darkened so
@@ -76,6 +80,7 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
   "firefox": {
     "path": null,                 // auto-detected
     "kiosk": true,
+    "extensions": ["sponsorblock"],   // addons.mozilla.org names, YouTube profile only
     "userAgent": "…",             // must look like a TV/console for youtube.com/tv
     "extraPrefs": { "media.hardware-video-decoding.force-enabled": true }
   },

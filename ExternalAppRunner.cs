@@ -291,9 +291,11 @@ public static class FirefoxSupport
     }
 
     /// <summary>A dedicated profile so the TV user agent and kiosk prefs don't touch your everyday Firefox.</summary>
+    public static readonly string ProfileDir = System.IO.Path.Combine(AppPaths.Local, "firefox-profile");
+
     public static string PrepareProfile(FirefoxSettings settings)
     {
-        var dir = System.IO.Path.Combine(AppPaths.Local, "firefox-profile");
+        var dir = ProfileDir;
         Directory.CreateDirectory(dir);
 
         var prefs = new Dictionary<string, object>
@@ -311,6 +313,9 @@ public static class FirefoxSupport
             ["media.autoplay.default"] = 0,
             ["full-screen-api.warning.timeout"] = 0,
             ["ui.key.menuAccessKeyFocuses"] = false,
+            // Enable add-ons placed in the profile's extensions folder (firefox.extensions) without the
+            // "allow this add-on?" prompt; the default (15) also auto-disables the profile scope (1).
+            ["extensions.autoDisableScopes"] = 14,
         };
         foreach (var (name, value) in settings.ExtraPrefs)
             prefs[name] = value;

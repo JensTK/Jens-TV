@@ -49,6 +49,8 @@ public sealed class MainWindow : Window
     string? _mappedPhotoFolder;
     bool _launcherReloading;
     string? _launchHotkeyError;
+    Task? _extensionSync;
+    List<string> _failedExtensions = [];
     string? _pendingToast;
     DateTime _ignoreConfigChangesUntil;
     bool _shutDown;
@@ -173,6 +175,8 @@ public sealed class MainWindow : Window
         {
             Log.Error("Updating start-with-Windows failed", ex);
         }
+
+        StartExtensionSync();
 
         _launchHotkeyError = null;
         try
@@ -481,7 +485,7 @@ public sealed class MainWindow : Window
                 }
                 break;
             case "launch":
-                Launch(msg.TryGetProperty("id", out var id) ? id.GetString() : null);
+                _ = LaunchAsync(msg.TryGetProperty("id", out var id) ? id.GetString() : null);
                 break;
             case "saveSettings":
                 SaveSettings(msg);
@@ -534,6 +538,8 @@ public sealed class MainWindow : Window
             notices.Add($"Sound device \"{_config.Audio.DeviceName}\" not connected");
         if (_launchHotkeyError != null)
             notices.Add($"Launch hotkey: {_launchHotkeyError}");
+        if (_failedExtensions.Count > 0)
+            notices.Add($"Couldn't install Firefox add-on: {string.Join(", ", _failedExtensions)}");
         var failedKeys = _hotkeys.Failed.Concat(_tvKeys.Failed).ToList();
         if (failedKeys.Count > 0)
             notices.Add($"Hotkey unavailable: {string.Join(", ", failedKeys)}");
@@ -641,9 +647,38 @@ public sealed class MainWindow : Window
         _web.Focus();
     }
 
+    // ---------------------------------------------------------------- Firefox add-ons
+
+    /// <summary>Installs/removes firefox.extensions in the background so they're ready before YouTube is opened.</summary>
+    void StartExtensionSync()
+    {
+        // The profile is in use while a Firefox app runs; the next config apply or start catches up.
+        var firefoxRunning = _config.Apps.Any(a => a.Id == _runner.RunningAppId && a.Type == "firefox");
+        if (firefoxRunning || _extensionSync is { IsCompleted: false })
+            return;
+        if (FirefoxSupport.FindExecutable(_config.Firefox.Path) is not { } exe)
+            return;
+
+        _extensionSync = RunExtensionSyncAsync(exe, _config.Firefox);
+    }
+
+    async Task RunExtensionSyncAsync(string exe, FirefoxSettings settings)
+    {
+        try
+        {
+            FirefoxSupport.PrepareProfile(settings); // user.js must enable profile add-ons before Firefox first sees them
+            _failedExtensions = await FirefoxExtensions.SyncAsync(exe, FirefoxSupport.ProfileDir, settings.Extensions.ToList());
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Syncing Firefox add-ons failed", ex);
+        }
+        SendState();
+    }
+
     // ---------------------------------------------------------------- apps
 
-    void Launch(string? id)
+    async Task LaunchAsync(string? id)
     {
         var app = _config.Apps.FirstOrDefault(a => a.Id == id);
         if (app == null)
@@ -651,6 +686,13 @@ public sealed class MainWindow : Window
 
         try
         {
+            // Firefox can't start on the profile while add-ons are being installed into it.
+            if (app.Type.Equals("firefox", StringComparison.OrdinalIgnoreCase) && _extensionSync is { IsCompleted: false } sync)
+            {
+                Toast("Getting Firefox add-ons ready…");
+                await sync;
+            }
+
             if (_runner.RunningAppId == app.Id)
             {
                 // Still running in the background (e.g. Spotify): bring it back rather than restarting it.

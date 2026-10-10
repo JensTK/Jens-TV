@@ -151,6 +151,12 @@ public sealed class FirefoxSettings
     public string UserAgent { get; set; } =
         "Mozilla/5.0 (PS4; Leanback Shell) Gecko/20100101 Firefox/65.0 LeanbackShell/01.00.01.75 Sony PS4/ (PS4, , no, CH)";
 
+    /// <summary>
+    /// Add-ons for the Jens-TV Firefox profile, by their addons.mozilla.org name (the last part of
+    /// addons.mozilla.org/firefox/addon/&lt;name&gt;), e.g. "sponsorblock", "ublock-origin".
+    /// </summary>
+    public List<string> Extensions { get; set; } = [];
+
     /// <summary>Extra about:config prefs written to the dedicated profile's user.js.</summary>
     public Dictionary<string, JsonElement> ExtraPrefs { get; set; } = [];
 }
