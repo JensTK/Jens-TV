@@ -29,6 +29,13 @@ const ICONS = {
     </svg>`,
 };
 
+const POWER_ICON = `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <g fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round">
+      <path d="M31 27a33 33 0 1 0 38 0"/>
+      <path d="M50 12v36"/>
+    </g>
+  </svg>`;
+
 // Gear in the text colour; each copy needs its own mask id.
 function gearIcon(maskId) {
   return `<svg viewBox="0 0 100 100" aria-hidden="true">
@@ -48,6 +55,7 @@ const els = {
   notice: document.getElementById('notice'),
   clock: document.getElementById('clock'),
   settingsButton: document.getElementById('settings-button'),
+  powerButton: document.getElementById('power-button'),
   settings: document.getElementById('settings'),
   settingsList: document.getElementById('settings-list'),
   toast: document.getElementById('toast'),
@@ -56,7 +64,7 @@ const els = {
 let state = null;
 let screen = 'home';
 let homeIndex = readStored('homeIndex', 0);
-let gearFocused = false; // home focus is on the top-right settings button instead of a tile
+let topFocus = null; // 'settings' / 'power' when home focus is on a top-right button instead of a tile
 let settingsRows = [];
 let settingsIndex = 0;
 let draft = null;
@@ -191,6 +199,7 @@ function renderStatus() {
 // ---------------------------------------------------------------- home
 
 const SETTINGS_INFO = { name: 'Settings', description: 'TV display, sound output, background and apps', accent: '#353b47' };
+const POWER_INFO = { name: 'Turn off', description: 'Close Jens-TV and put the PC back the way it was', accent: '#5c1f24' };
 
 function homeItems() {
   return (state ? state.config.apps : []).map((app) => ({ kind: 'app', app }));
@@ -238,8 +247,8 @@ function renderHome() {
     tile.setAttribute('aria-label', info.name);
     wrap.append(tile);
 
-    wrap.addEventListener('mouseenter', () => { homeIndex = i; gearFocused = false; updateHomeFocus(); });
-    wrap.addEventListener('click', () => { homeIndex = i; gearFocused = false; updateHomeFocus(); activateHome(); });
+    wrap.addEventListener('mouseenter', () => { homeIndex = i; topFocus = null; updateHomeFocus(); });
+    wrap.addEventListener('click', () => { homeIndex = i; topFocus = null; updateHomeFocus(); activateHome(); });
     return wrap;
   }));
 
@@ -248,11 +257,12 @@ function renderHome() {
 
 function updateHomeFocus() {
   const item = homeItems()[homeIndex];
-  if (!item) gearFocused = true; // no apps configured: only the gear is left
-  [...els.tiles.children].forEach((node, i) => node.classList.toggle('focused', !gearFocused && i === homeIndex));
-  els.settingsButton.classList.toggle('focused', gearFocused);
+  if (!item && !topFocus) topFocus = 'settings'; // no apps configured: only the top buttons are left
+  [...els.tiles.children].forEach((node, i) => node.classList.toggle('focused', !topFocus && i === homeIndex));
+  els.settingsButton.classList.toggle('focused', topFocus === 'settings');
+  els.powerButton.classList.toggle('focused', topFocus === 'power');
 
-  const info = gearFocused ? SETTINGS_INFO : itemInfo(item);
+  const info = topFocus === 'settings' ? SETTINGS_INFO : topFocus === 'power' ? POWER_INFO : itemInfo(item);
   els.heroTitle.textContent = info.name;
   els.heroSub.textContent = info.description;
   document.documentElement.style.setProperty('--glow', info.accent);
@@ -268,15 +278,25 @@ function moveHome(delta) {
   }
 }
 
-function focusGear(focused) {
-  if (gearFocused === focused) return;
-  gearFocused = focused;
+/** Moves home focus to a top-right button ('settings' / 'power') or back to the tiles (null). */
+function focusTop(target) {
+  if (topFocus === target) return;
+  topFocus = target;
   updateHomeFocus();
 }
 
+function quit() {
+  toast('Closing Jens-TV…');
+  send({ type: 'quit' });
+}
+
 function activateHome() {
-  if (gearFocused) {
+  if (topFocus === 'settings') {
     openSettings();
+    return;
+  }
+  if (topFocus === 'power') {
+    quit();
     return;
   }
   const item = homeItems()[homeIndex];
@@ -454,15 +474,18 @@ function activateRow() {
 
 function handleAction(action) {
   if (screen === 'home') {
-    if (gearFocused) {
-      if (action === 'down' || action === 'left' || action === 'back') focusGear(false);
+    if (topFocus) {
+      // Top row: [settings] [power]
+      if (action === 'right' && topFocus === 'settings') focusTop('power');
+      else if (action === 'left' && topFocus === 'power') focusTop('settings');
+      else if (action === 'down' || action === 'back' || action === 'left') focusTop(null);
       else if (action === 'ok') activateHome();
       else if (action === 'menu') openSettings();
       return;
     }
     if (action === 'left') moveHome(-1);
     else if (action === 'right') moveHome(1);
-    else if (action === 'up') focusGear(true);
+    else if (action === 'up') focusTop('settings');
     else if (action === 'ok') activateHome();
     else if (action === 'menu') openSettings();
   } else {
@@ -569,8 +592,11 @@ function tickClock() {
 
 document.getElementById('settings-icon').innerHTML = gearIcon('gear-hole-panel');
 els.settingsButton.innerHTML = gearIcon('gear-hole-button');
-els.settingsButton.addEventListener('mouseenter', () => focusGear(true));
-els.settingsButton.addEventListener('click', () => { focusGear(true); openSettings(); });
+els.settingsButton.addEventListener('mouseenter', () => focusTop('settings'));
+els.settingsButton.addEventListener('click', () => { focusTop('settings'); openSettings(); });
+els.powerButton.innerHTML = POWER_ICON;
+els.powerButton.addEventListener('mouseenter', () => focusTop('power'));
+els.powerButton.addEventListener('click', () => { focusTop('power'); quit(); });
 tickClock();
 setInterval(tickClock, 5000);
 

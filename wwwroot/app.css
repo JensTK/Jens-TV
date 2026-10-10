@@ -111,6 +111,8 @@ body.has-slides #bg {
 
 #clock { font-size: 1.6rem; font-weight: 500; font-variant-numeric: tabular-nums; }
 
+.top-buttons { display: flex; gap: 0.9rem; }
+
 .icon-button {
   display: grid;
   place-items: center;
@@ -124,6 +126,8 @@ body.has-slides #bg {
   transition: background 180ms ease, color 180ms ease, transform 220ms var(--ease), box-shadow 220ms var(--ease);
 }
 .icon-button svg { width: 1.7rem; height: 1.7rem; }
+#power-button svg { width: 1.5rem; height: 1.5rem; }
+#power-button.focused { background: #e5484d; color: #fff; }
 .icon-button.focused {
   background: var(--fg);
   color: #111;

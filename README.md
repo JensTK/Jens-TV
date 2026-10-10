@@ -29,6 +29,7 @@ output, then set the Jellyfin address.
 | Open / select | Enter | A |
 | Back | Esc / Backspace | B |
 | Settings | Up to the gear, then Enter; or Menu key | Up, then A; or Start |
+| Turn off Jens-TV | Up, Right to the power button, then Enter | Up, Right, then A |
 | **Return home from any app** | Home, media-keyboard Home, or Ctrl+Alt+Home | hold **Back + Start** |
 
 Returning home closes the running app (e.g. YouTube's Firefox) and brings the launcher back. The plain Home key
