@@ -94,7 +94,7 @@ function renderStatus() {
   els.notice.hidden = notices.length === 0;
   els.notice.textContent = notices.join('  ·  ');
 
-  const hotkeys = (state && state.config.homeHotkeys) || [];
+  const hotkeys = state ? [...(state.config.tvHotkeys || []), ...(state.config.homeHotkeys || [])] : [];
   const keyName = (k) => (k === 'BrowserHome' ? 'Home key' : k);
   const homeHelp = [hotkeys[0] && keyName(hotkeys[0]), state && state.config.gamepadHome ? 'hold Back + Start' : null].filter(Boolean).join(' or ');
   els.hint.textContent = `◀ ▶ choose   ·   OK open   ·   ${homeHelp || 'Back'} returns here`;

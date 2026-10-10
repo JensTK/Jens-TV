@@ -18,6 +18,20 @@ public sealed class ExternalAppRunner
 
     public string? RunningAppId => _process is { HasExited: false } ? _appId : null;
 
+    /// <summary>Whether the process belongs to the running app (including child processes, like Firefox's browser).</summary>
+    public bool OwnsProcess(int pid)
+    {
+        var process = _process;
+        try
+        {
+            return process is { HasExited: false } && ProcessTree.Get(process.Id).Contains(pid);
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     public void StartFirefox(AppEntry app, MonitorInfo? target, FirefoxSettings firefox)
     {
         var exe = FirefoxSupport.FindExecutable(firefox.Path)

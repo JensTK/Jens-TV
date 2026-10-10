@@ -11,6 +11,12 @@ public sealed class AppConfig
     /// <summary>Global hotkeys that close the running app and return to the launcher.</summary>
     public List<string> HomeHotkeys { get; set; } = ["BrowserHome", "Ctrl+Alt+Home"];
 
+    /// <summary>
+    /// Keys that return to the launcher only while Jens-TV or the app it launched is in front, so they keep
+    /// working normally in other programs (e.g. the plain Home key).
+    /// </summary>
+    public List<string> TvHotkeys { get; set; } = ["Home"];
+
     /// <summary>Holding Back + Start on an Xbox-style controller returns to the launcher.</summary>
     public bool GamepadHome { get; set; } = true;
 

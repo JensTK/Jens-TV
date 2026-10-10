@@ -26,6 +26,7 @@ public sealed class MainWindow : Window
     readonly ExternalAppRunner _runner = new();
     readonly HotkeyManager _hotkeys = new();
     readonly GamepadWatcher _gamepad;
+    readonly TvKeyHook _tvKeys;
     readonly DispatcherTimer _refreshDebounce = new() { Interval = TimeSpan.FromSeconds(1.5) };
     readonly DispatcherTimer _configDebounce = new() { Interval = TimeSpan.FromMilliseconds(700) };
     readonly FileSystemWatcher _configWatcher;
@@ -53,6 +54,7 @@ public sealed class MainWindow : Window
         Content = _web;
 
         _gamepad = new GamepadWatcher(GoHome);
+        _tvKeys = new TvKeyHook(IsTvInFront, GoHome);
         _runner.Exited += () => Dispatcher.InvokeAsync(() =>
         {
             BringToFront();
@@ -145,6 +147,7 @@ public sealed class MainWindow : Window
         PlaceOnTarget();
         _audio.Apply(_config.Audio);
         _hotkeys.Register(_hwnd, _config.HomeHotkeys);
+        _tvKeys.SetKeys(_config.TvHotkeys);
 
         if (_config.GamepadHome)
             _gamepad.Start();
@@ -436,8 +439,9 @@ public sealed class MainWindow : Window
             notices.Add($"TV display \"{_config.Display.MonitorName ?? _config.Display.MonitorDevice}\" not found, showing on {_target.FriendlyName}");
         if (_config.Audio.SwitchSystemDefault && _config.Audio.DeviceId != null && audioDevices.All(d => d.Id != _config.Audio.DeviceId))
             notices.Add($"Sound device \"{_config.Audio.DeviceName}\" not connected");
-        if (_hotkeys.Failed.Count > 0)
-            notices.Add($"Hotkey unavailable: {string.Join(", ", _hotkeys.Failed)}");
+        var failedKeys = _hotkeys.Failed.Concat(_tvKeys.Failed).ToList();
+        if (failedKeys.Count > 0)
+            notices.Add($"Hotkey unavailable: {string.Join(", ", failedKeys)}");
 
         Post(new
         {
@@ -487,6 +491,18 @@ public sealed class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// True while an app is showing on the TV and has focus: Jellyfin in our window, or the launched app (Firefox).
+    /// On the launcher itself keys keep their normal meaning (e.g. Home in an address field).
+    /// </summary>
+    bool IsTvInFront()
+    {
+        Win32.GetWindowThreadProcessId(Win32.GetForegroundWindow(), out var pid);
+        if (pid == Environment.ProcessId)
+            return !IsLauncherShowing();
+        return _runner.OwnsProcess((int)pid);
+    }
+
     void GoHome()
     {
         _runner.Stop();
@@ -504,6 +520,7 @@ public sealed class MainWindow : Window
 
         _runner.Stop(wait: true);
         _hotkeys.Unregister();
+        _tvKeys.Dispose();
         _gamepad.Stop();
         _configWatcher.Dispose();
         _audioWatcher?.Dispose();

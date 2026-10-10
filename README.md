@@ -27,9 +27,11 @@ First run: open **Settings** (last tile) and pick the TV display and sound outpu
 | Open / select | Enter | A |
 | Back | Esc / Backspace | B |
 | Settings | Menu key | Start |
-| **Return home from any app** | Home key (`BrowserHome`) or Ctrl+Alt+Home | hold **Back + Start** |
+| **Return home from any app** | Home, media-keyboard Home, or Ctrl+Alt+Home | hold **Back + Start** |
 
-Home is global: it works while Firefox has focus, closes the running app and brings the launcher back.
+Returning home closes the running app (e.g. YouTube's Firefox) and brings the launcher back. The plain Home key
+(`tvHotkeys`) only does this while Jens-TV or the app it launched is in front, so it keeps working normally in
+other programs on the PC. The media-keyboard Home key and Ctrl+Alt+Home (`homeHotkeys`) work from anywhere.
 Pressing Back on Jellyfin's home screen also returns to the launcher.
 
 ## How it works
@@ -59,7 +61,8 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
     "userAgent": "…",             // must look like a TV/console for youtube.com/tv
     "extraPrefs": { "media.hardware-video-decoding.force-enabled": true }
   },
-  "homeHotkeys": ["BrowserHome", "Ctrl+Alt+Home"],   // WPF key names; modifiers Ctrl/Alt/Shift/Win
+  "homeHotkeys": ["BrowserHome", "Ctrl+Alt+Home"],   // global; WPF key names, modifiers Ctrl/Alt/Shift/Win
+  "tvHotkeys": ["Home"],                             // only while Jens-TV or its app is in front
   "gamepadHome": true,
   "startWithWindows": false,
   "apps": [
