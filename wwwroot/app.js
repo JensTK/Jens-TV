@@ -16,6 +16,14 @@ const ICONS = {
       <rect width="100" height="70" rx="18" fill="#ff0033"/>
       <path d="M40 20 68 35 40 50Z" fill="#fff"/>
     </svg>`,
+  spotify: `<svg viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="48" fill="#1ed760"/>
+      <g fill="none" stroke="#0b0b0b" stroke-linecap="round">
+        <path d="M24 38c17-5.5 36-4.5 52 4" stroke-width="7.5"/>
+        <path d="M28 53c14-4.2 29-3.2 42 3.5" stroke-width="6.5"/>
+        <path d="M31.5 67c11-3.2 22-2.4 32 2.8" stroke-width="5.5"/>
+      </g>
+    </svg>`,
   settings: `<svg viewBox="0 0 100 100" aria-hidden="true">
       <mask id="gear-hole"><rect width="100" height="100" fill="#fff"/><circle cx="50" cy="50" r="13" fill="#000"/></mask>
       <g fill="#fff" mask="url(#gear-hole)">

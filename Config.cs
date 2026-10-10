@@ -49,7 +49,23 @@ public sealed class AppConfig
                 Background = "linear-gradient(160deg, #ffffff 0%, #e6e6ea 100%)",
                 Accent = "#7a1020",
             },
+            Spotify(),
         ],
+    };
+
+    /// <summary>The Spotify desktop app (Store or classic installer both handle the spotify: URI).</summary>
+    public static AppEntry Spotify() => new()
+    {
+        Id = "spotify",
+        Name = "Spotify",
+        Type = "exe",
+        Path = "spotify:",
+        ProcessName = "Spotify",
+        Maximize = true,
+        Icon = "spotify",
+        Description = "Music and podcasts",
+        Background = "linear-gradient(160deg, #1f1f1f 0%, #0b0b0b 100%)",
+        Accent = "#145c32",
     };
 }
 
@@ -119,6 +135,18 @@ public sealed class AppEntry
 
     /// <summary>exe apps: move the program's window onto the TV display.</summary>
     public bool MoveToTv { get; set; } = true;
+
+    /// <summary>exe apps: maximize the window on the TV.</summary>
+    public bool Maximize { get; set; }
+
+    /// <summary>
+    /// exe apps: track the app by process name (without .exe). Needed for Store apps and URIs, which the shell starts
+    /// on our behalf; also attaches to an instance that's already running.
+    /// </summary>
+    public string? ProcessName { get; set; }
+
+    /// <summary>Close the app when returning home. False keeps it running in the background (e.g. music).</summary>
+    public bool CloseOnHome { get; set; } = true;
 }
 
 public static class AppPaths

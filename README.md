@@ -5,6 +5,7 @@ It runs fullscreen on the TV, is driven by keyboard, remote or gamepad, and laun
 
 - **Jellyfin** inside the TV window (Jellyfin's web client, forced into its TV layout)
 - **YouTube** via `youtube.com/tv` in a dedicated Firefox kiosk window placed on the TV
+- **Spotify** desktop app, maximized on the TV
 - anything else you add (programs, shortcuts, `steam://` URIs, other web apps)
 
 ## Run
@@ -69,6 +70,9 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
     { "id": "jellyfin", "name": "Jellyfin", "type": "web", "url": "http://localhost:8096", "icon": "jellyfin" },
     { "id": "youtube",  "name": "YouTube",  "type": "firefox", "url": "https://www.youtube.com/tv", "icon": "youtube" },
 
+    { "id": "spotify",  "name": "Spotify",  "type": "exe", "path": "spotify:", "processName": "Spotify",
+      "maximize": true, "icon": "spotify" },
+
     // more examples:
     { "id": "steam", "name": "Steam", "type": "exe", "path": "steam://open/bigpicture",
       "background": "linear-gradient(160deg,#1b2838,#2a475e)", "accent": "#1b3a5c" },
@@ -82,8 +86,15 @@ App types:
 
 - `web`: opens inside the TV window. `forceTvLayout` (default true) sets Jellyfin's TV layout.
 - `firefox`: opens the URL in the Jens-TV Firefox profile, fullscreen on the TV.
-- `exe`: starts a program (`path` + `args`). Non-`.exe` paths (shortcuts, URIs) go through the shell and aren't tracked,
-  so Home can't close them. `moveToTv` moves the program's window to the TV.
+- `exe`: starts a program (`path` + `args`). Non-`.exe` paths (shortcuts, Store apps, URIs) go through the shell; set
+  `processName` (without `.exe`) so Jens-TV can find the real process, move it and close it. `moveToTv` moves the
+  window to the TV, `maximize` maximizes it there.
+
+Any app: `closeOnHome: false` leaves it running when you go home (the tile shows "Running"; opening it again brings
+the same window back). Opening a different app still closes it.
+
+Spotify notes: the desktop app is built for mouse and keyboard rather than a remote (Space plays/pauses, Ctrl+L
+searches). The web player isn't used because the Firefox profile presents a TV user agent and Spotify needs DRM.
 
 Tile look: `icon` (`jellyfin`, `youtube`, an image URL, or empty for a letter), `background` (any CSS background),
 `accent` (glow colour) and `description`.

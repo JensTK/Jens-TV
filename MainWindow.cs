@@ -271,7 +271,17 @@ public sealed class MainWindow : Window
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Maximized;
         Activate();
+
+        // Windows only lets the foreground thread hand over focus. When Home comes from the keyboard hook while
+        // another app (Spotify) stays open, borrow that thread's input state so the launcher can take over.
+        var foregroundThread = Win32.GetWindowThreadProcessId(Win32.GetForegroundWindow(), out _);
+        var ourThread = Win32.GetCurrentThreadId();
+        var attached = foregroundThread != ourThread && Win32.AttachThreadInput(ourThread, foregroundThread, true);
+        Win32.BringWindowToTop(_hwnd);
         Win32.SetForegroundWindow(_hwnd);
+        if (attached)
+            Win32.AttachThreadInput(ourThread, foregroundThread, false);
+
         _web.Focus();
     }
 
@@ -465,6 +475,13 @@ public sealed class MainWindow : Window
 
         try
         {
+            if (_runner.RunningAppId == app.Id)
+            {
+                // Still running in the background (e.g. Spotify): bring it back rather than restarting it.
+                _runner.Activate(_target);
+                return;
+            }
+
             switch (app.Type.ToLowerInvariant())
             {
                 case "web":
@@ -505,7 +522,8 @@ public sealed class MainWindow : Window
 
     void GoHome()
     {
-        _runner.Stop();
+        if (_runner.CloseOnHome)
+            _runner.Stop();
         if (_web.CoreWebView2 != null && !IsLauncherShowing())
             _web.CoreWebView2.Navigate(LauncherUrl);
         BringToFront();

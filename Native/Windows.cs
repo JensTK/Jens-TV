@@ -9,24 +9,11 @@ public static class ProcessTree
     public static HashSet<int> Get(int rootPid)
     {
         var children = new Dictionary<int, List<int>>();
-        var snapshot = Win32.CreateToolhelp32Snapshot(Win32.TH32CS_SNAPPROCESS, 0);
-        if (snapshot != Win32.INVALID_HANDLE_VALUE)
+        foreach (var (pid, parent) in GetParents())
         {
-            try
-            {
-                var entry = new Win32.PROCESSENTRY32W { dwSize = (uint)Marshal.SizeOf<Win32.PROCESSENTRY32W>() };
-                for (var ok = Win32.Process32FirstW(snapshot, ref entry); ok; ok = Win32.Process32NextW(snapshot, ref entry))
-                {
-                    var parent = (int)entry.th32ParentProcessID;
-                    if (!children.TryGetValue(parent, out var list))
-                        children[parent] = list = [];
-                    list.Add((int)entry.th32ProcessID);
-                }
-            }
-            finally
-            {
-                Win32.CloseHandle(snapshot);
-            }
+            if (!children.TryGetValue(parent, out var list))
+                children[parent] = list = [];
+            list.Add(pid);
         }
 
         var result = new HashSet<int> { rootPid };
@@ -40,6 +27,26 @@ public static class ProcessTree
                     queue.Enqueue(child);
         }
         return result;
+    }
+
+    /// <summary>Process ID → parent process ID for every running process.</summary>
+    public static Dictionary<int, int> GetParents()
+    {
+        var parents = new Dictionary<int, int>();
+        var snapshot = Win32.CreateToolhelp32Snapshot(Win32.TH32CS_SNAPPROCESS, 0);
+        if (snapshot == Win32.INVALID_HANDLE_VALUE)
+            return parents;
+        try
+        {
+            var entry = new Win32.PROCESSENTRY32W { dwSize = (uint)Marshal.SizeOf<Win32.PROCESSENTRY32W>() };
+            for (var ok = Win32.Process32FirstW(snapshot, ref entry); ok; ok = Win32.Process32NextW(snapshot, ref entry))
+                parents[(int)entry.th32ProcessID] = (int)entry.th32ParentProcessID;
+        }
+        finally
+        {
+            Win32.CloseHandle(snapshot);
+        }
+        return parents;
     }
 }
 
@@ -65,7 +72,8 @@ public static class WindowFinder
             Win32.GetClassName(hwnd, className, className.Capacity);
             if (IgnoredClasses.Contains(className.ToString()))
                 return true;
-            if (Win32.GetWindowRect(hwnd, out var r) && (r.Width < 200 || r.Height < 150))
+            // Minimized windows have a tiny rect, so only apply the size filter to restored ones.
+            if (!Win32.IsIconic(hwnd) && Win32.GetWindowRect(hwnd, out var r) && (r.Width < 200 || r.Height < 150))
                 return true;
             result.Add(hwnd);
             return true;
@@ -75,10 +83,12 @@ public static class WindowFinder
 
     /// <summary>
     /// Moves a window onto the target monitor. Borderless fullscreen windows (Firefox kiosk) are resized to cover it;
-    /// maximized windows are re-maximized there; normal windows are centred.
+    /// maximized windows (or all, with <paramref name="maximize"/>) are maximized there; normal windows are centred.
     /// </summary>
-    public static void EnsureOnMonitor(IntPtr hwnd, MonitorInfo target, HashSet<IntPtr> fullscreenWindows)
+    public static void EnsureOnMonitor(IntPtr hwnd, MonitorInfo target, HashSet<IntPtr> fullscreenWindows, bool maximize = false)
     {
+        if (Win32.IsIconic(hwnd))
+            Win32.ShowWindow(hwnd, Win32.SW_RESTORE);
         if (!Win32.GetWindowRect(hwnd, out var rect))
             return;
 
@@ -96,14 +106,18 @@ public static class WindowFinder
         var coversTarget = rect.Left == t.X && rect.Top == t.Y && rect.Width == t.Width && rect.Height == t.Height;
 
         if (onTarget && (!fullscreenWindows.Contains(hwnd) || coversTarget))
+        {
+            if (maximize && !fullscreenWindows.Contains(hwnd) && !Win32.IsZoomed(hwnd))
+                Win32.ShowWindow(hwnd, Win32.SW_MAXIMIZE);
             return;
+        }
 
         const uint flags = Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE;
         if (fullscreenWindows.Contains(hwnd))
         {
             Win32.SetWindowPos(hwnd, IntPtr.Zero, t.X, t.Y, t.Width, t.Height, flags);
         }
-        else if (Win32.IsZoomed(hwnd))
+        else if (maximize || Win32.IsZoomed(hwnd))
         {
             Win32.ShowWindow(hwnd, Win32.SW_RESTORE);
             Win32.SetWindowPos(hwnd, IntPtr.Zero, t.X + 50, t.Y + 50, Math.Min(rect.Width, t.Width - 100), Math.Min(rect.Height, t.Height - 100), flags);
