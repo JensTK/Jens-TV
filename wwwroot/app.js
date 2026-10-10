@@ -8,7 +8,10 @@ const webview = window.chrome && window.chrome.webview;
 const DEFAULT_ACCENT = '#2a3550';
 
 const ICONS = {
-  jellyfin: `<svg viewBox="0 0 100 92" aria-hidden="true">
+  jellyfin: `<svg class="jellyfin-logo" viewBox="0 0 100 92" aria-hidden="true">
+      <defs><linearGradient id="jellyfin-gradient" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#aa5cc3"/><stop offset="1" stop-color="#00a4dc"/>
+      </linearGradient></defs>
       <path fill="#fff" fill-rule="evenodd" d="M50 2C42 2 2 74 6 82s84 8 88 0S58 2 50 2Zm0 24c-4 0-25 42-23 46s44 4 46 0S54 26 50 26Z"/>
       <path fill="#fff" d="M50 44c-2.4 0-13 22-12 24.5s23 2.5 24 0S52.4 44 50 44Z"/>
     </svg>`,
@@ -24,14 +27,18 @@ const ICONS = {
         <path d="M31.5 67c11-3.2 22-2.4 32 2.8" stroke-width="5.5"/>
       </g>
     </svg>`,
-  settings: `<svg viewBox="0 0 100 100" aria-hidden="true">
-      <mask id="gear-hole"><rect width="100" height="100" fill="#fff"/><circle cx="50" cy="50" r="13" fill="#000"/></mask>
-      <g fill="#fff" mask="url(#gear-hole)">
+};
+
+// Gear in the text colour; each copy needs its own mask id.
+function gearIcon(maskId) {
+  return `<svg viewBox="0 0 100 100" aria-hidden="true">
+      <mask id="${maskId}"><rect width="100" height="100" fill="#fff"/><circle cx="50" cy="50" r="13" fill="#000"/></mask>
+      <g fill="currentColor" mask="url(#${maskId})">
         ${[0, 45, 90, 135].map((a) => `<rect x="42" y="6" width="16" height="88" rx="4" transform="rotate(${a} 50 50)"/>`).join('')}
         <circle cx="50" cy="50" r="31"/>
       </g>
-    </svg>`,
-};
+    </svg>`;
+}
 
 const els = {
   tiles: document.getElementById('tiles'),
@@ -40,6 +47,7 @@ const els = {
   hint: document.getElementById('hint'),
   notice: document.getElementById('notice'),
   clock: document.getElementById('clock'),
+  settingsButton: document.getElementById('settings-button'),
   settings: document.getElementById('settings'),
   settingsList: document.getElementById('settings-list'),
   toast: document.getElementById('toast'),
@@ -48,6 +56,7 @@ const els = {
 let state = null;
 let screen = 'home';
 let homeIndex = readStored('homeIndex', 0);
+let gearFocused = false; // home focus is on the top-right settings button instead of a tile
 let settingsRows = [];
 let settingsIndex = 0;
 let draft = null;
@@ -176,27 +185,18 @@ function renderStatus() {
   const hotkeys = state ? [...(state.config.tvHotkeys || []), ...(state.config.homeHotkeys || [])] : [];
   const keyName = (k) => (k === 'BrowserHome' ? 'Home key' : k);
   const homeHelp = [hotkeys[0] && keyName(hotkeys[0]), state && state.config.gamepadHome ? 'hold Back + Start' : null].filter(Boolean).join(' or ');
-  els.hint.textContent = `◀ ▶ choose   ·   OK open   ·   ${homeHelp || 'Back'} returns here`;
+  els.hint.textContent = `◀ ▶ choose   ·   OK open   ·   ▲ settings   ·   ${homeHelp || 'Back'} returns here`;
 }
 
 // ---------------------------------------------------------------- home
 
+const SETTINGS_INFO = { name: 'Settings', description: 'TV display, sound output, background and apps', accent: '#353b47' };
+
 function homeItems() {
-  const apps = state ? state.config.apps : [];
-  return [...apps.map((app) => ({ kind: 'app', app })), { kind: 'settings' }];
+  return (state ? state.config.apps : []).map((app) => ({ kind: 'app', app }));
 }
 
 function itemInfo(item) {
-  if (item.kind === 'settings') {
-    return {
-      id: 'settings',
-      name: 'Settings',
-      description: 'TV display, sound output and apps',
-      background: 'linear-gradient(160deg, #50566360 0%, #23262d 100%), #2c3038',
-      accent: '#353b47',
-      icon: 'settings',
-    };
-  }
   const a = item.app;
   return {
     id: a.id,
@@ -226,18 +226,20 @@ function buildIcon(info) {
 function renderHome() {
   const items = homeItems();
   homeIndex = Math.min(Math.max(homeIndex, 0), items.length - 1);
+  document.body.classList.toggle('transparent-tiles', !!(state && state.config.transparentTiles));
 
   els.tiles.replaceChildren(...items.map((item, i) => {
     const info = itemInfo(item);
     const wrap = el('div', 'tile-wrap');
     const tile = el('div', 'tile');
-    tile.style.background = info.background;
+    tile.style.setProperty('--tile-bg', info.background);
     tile.append(buildIcon(info));
     if (state && state.running === info.id) tile.append(el('span', 'badge', 'Running'));
-    wrap.append(tile, el('div', 'tile-label', info.name));
+    tile.setAttribute('aria-label', info.name);
+    wrap.append(tile);
 
-    wrap.addEventListener('mouseenter', () => { homeIndex = i; updateHomeFocus(); });
-    wrap.addEventListener('click', () => { homeIndex = i; updateHomeFocus(); activateHome(); });
+    wrap.addEventListener('mouseenter', () => { homeIndex = i; gearFocused = false; updateHomeFocus(); });
+    wrap.addEventListener('click', () => { homeIndex = i; gearFocused = false; updateHomeFocus(); activateHome(); });
     return wrap;
   }));
 
@@ -246,9 +248,11 @@ function renderHome() {
 
 function updateHomeFocus() {
   const item = homeItems()[homeIndex];
-  if (!item) return;
-  [...els.tiles.children].forEach((node, i) => node.classList.toggle('focused', i === homeIndex));
-  const info = itemInfo(item);
+  if (!item) gearFocused = true; // no apps configured: only the gear is left
+  [...els.tiles.children].forEach((node, i) => node.classList.toggle('focused', !gearFocused && i === homeIndex));
+  els.settingsButton.classList.toggle('focused', gearFocused);
+
+  const info = gearFocused ? SETTINGS_INFO : itemInfo(item);
   els.heroTitle.textContent = info.name;
   els.heroSub.textContent = info.description;
   document.documentElement.style.setProperty('--glow', info.accent);
@@ -264,13 +268,19 @@ function moveHome(delta) {
   }
 }
 
+function focusGear(focused) {
+  if (gearFocused === focused) return;
+  gearFocused = focused;
+  updateHomeFocus();
+}
+
 function activateHome() {
-  const item = homeItems()[homeIndex];
-  if (!item) return;
-  if (item.kind === 'settings') {
+  if (gearFocused) {
     openSettings();
     return;
   }
+  const item = homeItems()[homeIndex];
+  if (!item) return;
   toast(`Opening ${item.app.name}…`);
   send({ type: 'launch', id: item.app.id });
 }
@@ -285,6 +295,7 @@ function openSettings() {
     audioDeviceId: state.config.audio.deviceId || currentDefault,
     switchAudio: state.config.audio.switchSystemDefault,
     startWithWindows: state.config.startWithWindows,
+    transparentTiles: state.config.transparentTiles,
     slideshowEnabled: state.config.slideshow.enabled,
     slideshowFolder: state.config.slideshow.folder || null,
     slideshowInterval: state.config.slideshow.intervalSeconds,
@@ -341,7 +352,8 @@ function buildSettingsRows() {
     { kind: 'select', label: 'Sound output', key: 'audioDeviceId', options: audioOptions },
     { kind: 'toggle', label: 'Use this sound output while Jens-TV runs', key: 'switchAudio' },
     { kind: 'toggle', label: 'Start with Windows', key: 'startWithWindows' },
-    { kind: 'toggle', label: 'Background slideshow', key: 'slideshowEnabled', gap: true },
+    { kind: 'toggle', label: 'Transparent app tiles', key: 'transparentTiles', gap: true },
+    { kind: 'toggle', label: 'Background slideshow', key: 'slideshowEnabled' },
     { kind: 'folder', label: 'Photo folder', key: 'slideshowFolder' },
     {
       kind: 'select', label: 'Change photo every', key: 'slideshowInterval',
@@ -442,8 +454,15 @@ function activateRow() {
 
 function handleAction(action) {
   if (screen === 'home') {
+    if (gearFocused) {
+      if (action === 'down' || action === 'left' || action === 'back') focusGear(false);
+      else if (action === 'ok') activateHome();
+      else if (action === 'menu') openSettings();
+      return;
+    }
     if (action === 'left') moveHome(-1);
     else if (action === 'right') moveHome(1);
+    else if (action === 'up') focusGear(true);
     else if (action === 'ok') activateHome();
     else if (action === 'menu') openSettings();
   } else {
@@ -548,7 +567,10 @@ function tickClock() {
   els.clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-document.getElementById('settings-icon').innerHTML = ICONS.settings;
+document.getElementById('settings-icon').innerHTML = gearIcon('gear-hole-panel');
+els.settingsButton.innerHTML = gearIcon('gear-hole-button');
+els.settingsButton.addEventListener('mouseenter', () => focusGear(true));
+els.settingsButton.addEventListener('click', () => { focusGear(true); openSettings(); });
 tickClock();
 setInterval(tickClock, 5000);
 

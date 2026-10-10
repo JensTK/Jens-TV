@@ -104,12 +104,32 @@ body.has-slides #bg {
   align-items: center;
 }
 
-.brand { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.02em; }
+.brand { font-size: 2.6rem; font-weight: 700; letter-spacing: 0.01em; line-height: 1; }
 .brand span { font-weight: 300; margin-left: 0.15em; opacity: 0.8; }
 
 .status { display: flex; align-items: center; gap: 1.6rem; }
 
 #clock { font-size: 1.6rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 3.2rem;
+  height: 3.2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--fg);
+  transition: background 180ms ease, color 180ms ease, transform 220ms var(--ease), box-shadow 220ms var(--ease);
+}
+.icon-button svg { width: 1.7rem; height: 1.7rem; }
+.icon-button.focused {
+  background: var(--fg);
+  color: #111;
+  transform: scale(1.18);
+  box-shadow: 0 0.8rem 1.8rem rgba(0, 0, 0, 0.5);
+}
 
 #notice {
   font-size: 0.95rem;
@@ -123,47 +143,53 @@ body.has-slides #bg {
 
 /* ---------------------------------------------------------------- home */
 
-.hero {
+/* Tiles with the focused app's name and description underneath, anchored above the hint line. */
+.home-main {
   position: absolute;
   left: 4.5rem;
-  top: 24vh;
-  max-width: 60rem;
+  right: 4.5rem;
+  bottom: 7.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.6rem;
 }
 
+.hero { max-width: 60rem; }
+
 .hero h1 {
-  font-size: 4.4rem;
+  font-size: 3.2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.05;
 }
 
+/* One line, so a long description can't change the height and shift the tiles. */
 .hero p {
-  margin-top: 0.9rem;
-  font-size: 1.45rem;
+  margin-top: 0.7rem;
+  font-size: 1.1rem;
   color: var(--muted);
   min-height: 1.45em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tiles {
-  position: absolute;
-  left: 4.5rem;
-  right: 4.5rem;
-  bottom: 13rem;
   display: flex;
-  gap: 2.2rem;
+  gap: 1.8rem;
 }
 
 .tile-wrap { position: relative; flex: 0 0 auto; }
 
 .tile {
   position: relative;
-  width: 20.5rem;
+  width: 15.5rem;
   aspect-ratio: 16 / 9;
   border-radius: 1.1rem;
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: #262a33;
+  background: var(--tile-bg, #262a33);
   box-shadow: 0 0.6rem 1.4rem rgba(0, 0, 0, 0.45);
   transition: transform 260ms var(--ease), box-shadow 260ms var(--ease);
 }
@@ -187,7 +213,7 @@ body.has-slides #bg {
 
 .tile svg { width: 36%; height: auto; }
 .tile img { max-width: 60%; max-height: 60%; object-fit: contain; }
-.tile .letter { font-size: 5rem; font-weight: 700; color: #fff; }
+.tile .letter { font-size: 3.8rem; font-weight: 700; color: #fff; }
 
 .tile .badge {
   position: absolute;
@@ -201,19 +227,28 @@ body.has-slides #bg {
   background: rgba(0, 0, 0, 0.55);
 }
 
-.tile-label {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 1.6rem);
-  text-align: center;
-  font-size: 1.2rem;
-  font-weight: 600;
-  opacity: 0;
-  transform: translateY(-0.4rem);
-  transition: opacity 220ms var(--ease), transform 220ms var(--ease);
+/* Transparent tiles: logos float on the background; the focused one sits on a frosted-glass panel. */
+body.transparent-tiles .tile {
+  background: transparent;
+  box-shadow: none;
+  transition: transform 260ms var(--ease), background 260ms ease, box-shadow 260ms var(--ease);
 }
-.tile-wrap.focused .tile-label { opacity: 1; transform: none; }
+body.transparent-tiles .tile::after { display: none; }
+body.transparent-tiles .tile svg,
+body.transparent-tiles .tile img,
+body.transparent-tiles .tile .letter {
+  width: 46%;
+  filter: drop-shadow(0 0.4rem 0.9rem rgba(0, 0, 0, 0.55));
+  transition: width 260ms var(--ease);
+}
+body.transparent-tiles .tile-wrap.focused .tile {
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(1.2rem) saturate(1.4);
+  box-shadow: 0 1.6rem 3rem rgba(0, 0, 0, 0.45), inset 0 0 0 0.08rem rgba(255, 255, 255, 0.25);
+}
+body.transparent-tiles .tile-wrap.focused .tile svg { width: 52%; }
+/* Without its gradient tile, Jellyfin's logo gets the brand gradient itself. */
+body.transparent-tiles .jellyfin-logo path { fill: url(#jellyfin-gradient); }
 
 .hint {
   position: absolute;

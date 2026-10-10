@@ -22,6 +22,9 @@ public sealed class AppConfig
     public bool GamepadHome { get; set; } = true;
 
     public bool StartWithWindows { get; set; }
+
+    /// <summary>Show app logos without their tile backgrounds; the focused tile gets a frosted-glass panel.</summary>
+    public bool TransparentTiles { get; set; }
     public List<AppEntry> Apps { get; set; } = [];
 
     public static AppConfig CreateDefault() => new()

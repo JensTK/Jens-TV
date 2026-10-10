@@ -238,6 +238,8 @@ public sealed class MainWindow : Window
             _config.Slideshow.Folder = string.IsNullOrWhiteSpace(folder.GetString()) ? null : folder.GetString();
         if (s.TryGetProperty("slideshowInterval", out var interval) && interval.TryGetInt32(out var seconds) && seconds >= 5)
             _config.Slideshow.IntervalSeconds = seconds;
+        if (Bool("transparentTiles") is { } transparentTiles)
+            _config.TransparentTiles = transparentTiles;
         if (Bool("startWithWindows") is { } startWithWindows)
             _config.StartWithWindows = startWithWindows;
 
