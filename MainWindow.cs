@@ -44,7 +44,10 @@ public sealed class MainWindow : Window
     bool _targetMatched = true;
     bool _tvConnectedNotExtended;
     string? _extendAttemptedFor;
-    DisplaySnapshot? _displayBeforeExtend; // set only when Jens-TV extended the desktop itself
+    DisplaySnapshot? _displayBeforeChange; // set only when Jens-TV changed the display setup itself
+    bool _turnOffAttempted;
+    bool _screensTurnedOff;
+    bool _refocusAfterDisplayChange;
     string? _injectedScriptId;
     string? _mappedPhotoFolder;
     bool _launcherReloading;
@@ -81,6 +84,13 @@ public sealed class MainWindow : Window
             PlaceOnTarget();
             _audio.Apply(_config.Audio);
             SendState();
+
+            // Our own display changes (extend, turn off screens, restore) move windows around and Windows may hand
+            // focus to some other window; take it back so the remote keeps controlling Jens-TV. Never for changes
+            // made by someone else, or while a launched app should have focus.
+            if (_refocusAfterDisplayChange && _runner.RunningAppId == null)
+                BringToFront();
+            _refocusAfterDisplayChange = false;
         };
 
         // Pick up hand edits to config.json.
@@ -157,6 +167,11 @@ public sealed class MainWindow : Window
 
     void ApplyConfig()
     {
+        // "Turn off other screens" was switched off (Settings or config.json): bring them back now, not at exit.
+        // The resulting display change re-runs placement, which extends to the TV again if needed.
+        if (_screensTurnedOff && !_config.Display.TurnOffOtherScreens)
+            RestoreDisplays();
+
         PlaceOnTarget();
         _audio.Apply(_config.Audio);
         _hotkeys.Register(_hwnd, _config.HomeHotkeys);
@@ -256,6 +271,8 @@ public sealed class MainWindow : Window
             _config.Slideshow.IntervalSeconds = seconds;
         if (Bool("transparentTiles") is { } transparentTiles)
             _config.TransparentTiles = transparentTiles;
+        if (Bool("turnOffOtherScreens") is { } turnOffOtherScreens)
+            _config.Display.TurnOffOtherScreens = turnOffOtherScreens;
         if (Bool("startWithWindows") is { } startWithWindows)
             _config.StartWithWindows = startWithWindows;
 
@@ -300,6 +317,7 @@ public sealed class MainWindow : Window
 
         _target = Monitors.Resolve(monitors, _config.Display, out _targetMatched);
         TryExtendToTv();
+        TryTurnOffOtherScreens(monitors.Count);
 
         if (WindowState == WindowState.Maximized &&
             string.Equals(Monitors.DeviceForWindow(_hwnd), _target.DeviceName, StringComparison.OrdinalIgnoreCase))
@@ -339,7 +357,47 @@ public sealed class MainWindow : Window
         _extendAttemptedFor = name;
         Log.Info($"{name} is connected but not part of the desktop; extending");
         // Keep the earliest snapshot: if the TV drops out and gets re-extended, that's still the original setup.
-        _displayBeforeExtend ??= Monitors.ExtendDesktop();
+        _refocusAfterDisplayChange = true;
+        _displayBeforeChange ??= Monitors.ExtendDesktop();
+    }
+
+    /// <summary>
+    /// display.turnOffOtherScreens: once the configured TV is in use, take every other screen off the desktop. Like
+    /// extending, only tried once per TV connection, so turning a screen back on with Win+P sticks.
+    /// </summary>
+    void TryTurnOffOtherScreens(int activeMonitors)
+    {
+        var tvInUse = _targetMatched && _target != null && !string.IsNullOrEmpty(_config.Display.MonitorName);
+        if (!tvInUse)
+        {
+            _turnOffAttempted = false; // TV gone (Windows brings another screen back by itself): try again next time
+            return;
+        }
+        if (!_config.Display.TurnOffOtherScreens || _turnOffAttempted || activeMonitors <= 1)
+            return;
+
+        _turnOffAttempted = true;
+        var before = Monitors.CaptureDisplayConfig();
+        if (Monitors.ShowOnly(_target!.DeviceName))
+        {
+            _refocusAfterDisplayChange = true;
+            _displayBeforeChange ??= before;
+            _screensTurnedOff = true;
+        }
+    }
+
+    /// <summary>Puts back the display setup from before Jens-TV changed it, and allows the changes to happen again.</summary>
+    void RestoreDisplays()
+    {
+        if (_displayBeforeChange != null)
+        {
+            _refocusAfterDisplayChange = true;
+            Monitors.RestoreDisplayConfig(_displayBeforeChange);
+        }
+        _displayBeforeChange = null;
+        _screensTurnedOff = false;
+        _turnOffAttempted = false;
+        _extendAttemptedFor = null;
     }
 
     void BringToFront()
@@ -789,7 +847,8 @@ public sealed class MainWindow : Window
         if (_config.Audio.RestoreOnExit)
             _audio.Restore();
         // Displays last: switching the TV off the desktop also removes its HDMI audio device.
-        if (_config.Display.RestoreOnExit && _displayBeforeExtend != null)
-            Monitors.RestoreDisplayConfig(_displayBeforeExtend);
+        // Screens that were turned off always come back; an extended TV only if restoreOnExit.
+        if (_config.Display.RestoreOnExit || _screensTurnedOff)
+            RestoreDisplays();
     }
 }

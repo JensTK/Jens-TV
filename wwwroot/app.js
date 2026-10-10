@@ -320,6 +320,7 @@ function openSettings() {
     switchAudio: state.config.audio.switchSystemDefault,
     startWithWindows: state.config.startWithWindows,
     transparentTiles: state.config.transparentTiles,
+    turnOffOtherScreens: state.config.display.turnOffOtherScreens,
     slideshowEnabled: state.config.slideshow.enabled,
     slideshowFolder: state.config.slideshow.folder || null,
     slideshowInterval: state.config.slideshow.intervalSeconds,
@@ -373,6 +374,7 @@ function buildSettingsRows() {
       kind: 'select', label: 'TV display', key: 'monitorDevice',
       options: () => state.monitors.map((m) => ({ value: m.device, label: m.label })),
     },
+    { kind: 'toggle', label: 'Turn off other screens while Jens-TV runs', key: 'turnOffOtherScreens' },
     { kind: 'select', label: 'Sound output', key: 'audioDeviceId', options: audioOptions },
     { kind: 'toggle', label: 'Use this sound output while Jens-TV runs', key: 'switchAudio' },
     { kind: 'toggle', label: 'Start with Windows', key: 'startWithWindows' },
@@ -613,6 +615,7 @@ if (webview) {
     config: {
       homeHotkeys: ['BrowserHome'], gamepadHome: true, startWithWindows: false,
       audio: { deviceId: 'a', switchSystemDefault: true },
+      display: { turnOffOtherScreens: false },
       slideshow: { enabled: true, folder: null, intervalSeconds: 30 },
       apps: [
         { id: 'jellyfin', name: 'Jellyfin', type: 'web', url: 'http://localhost:8096', icon: 'jellyfin',

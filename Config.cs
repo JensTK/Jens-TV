@@ -131,6 +131,12 @@ public sealed class DisplaySettings
 
     /// <summary>When Jens-TV extended the desktop itself, put the previous display setup back on exit.</summary>
     public bool RestoreOnExit { get; set; } = true;
+
+    /// <summary>
+    /// While Jens-TV runs and the TV is on, take every other screen off the desktop (they go to standby). The previous
+    /// setup always comes back on exit.
+    /// </summary>
+    public bool TurnOffOtherScreens { get; set; }
 }
 
 public sealed class AudioSettings

@@ -151,6 +151,60 @@ public static class Monitors
         return paths.Length == 0 ? null : new DisplaySnapshot(paths, modes);
     }
 
+    /// <summary>
+    /// Like Win+P "Second screen only", but for a specific display: every other display is taken off the desktop (they
+    /// get no signal and go to standby) and this one becomes the main display.
+    /// </summary>
+    public static bool ShowOnly(string deviceName)
+    {
+        var (paths, modes) = QueryConfig(Win32.QDC_ONLY_ACTIVE_PATHS);
+        if (paths.Length <= 1)
+            return true;
+
+        var keepIndex = Array.FindIndex(paths, p => string.Equals(GetSourceName(p.sourceInfo), deviceName, StringComparison.OrdinalIgnoreCase));
+        if (keepIndex < 0)
+        {
+            Log.Error($"Turning off other screens: {deviceName} isn't an active display");
+            return false;
+        }
+
+        // Pass just this path and the modes it references, re-indexed.
+        var path = paths[keepIndex];
+        var keptModes = new List<Win32.DISPLAYCONFIG_MODE_INFO>();
+        if (path.sourceInfo.modeInfoIdx != Win32.DISPLAYCONFIG_PATH_MODE_IDX_INVALID)
+        {
+            var source = modes[path.sourceInfo.modeInfoIdx];
+            source.sourcePositionX = 0; // at the origin = main display
+            source.sourcePositionY = 0;
+            path.sourceInfo.modeInfoIdx = (uint)keptModes.Count;
+            keptModes.Add(source);
+        }
+        if (path.targetInfo.modeInfoIdx != Win32.DISPLAYCONFIG_PATH_MODE_IDX_INVALID)
+        {
+            var target = modes[path.targetInfo.modeInfoIdx];
+            path.targetInfo.modeInfoIdx = (uint)keptModes.Count;
+            keptModes.Add(target);
+        }
+
+        var result = Win32.SetDisplayConfig(1, [path], (uint)keptModes.Count, keptModes.ToArray(),
+            Win32.SDC_APPLY | Win32.SDC_USE_SUPPLIED_DISPLAY_CONFIG | Win32.SDC_ALLOW_CHANGES);
+        if (result != 0)
+            Log.Error($"Turning off other screens failed: error {result}");
+        else
+            Log.Info($"Turned off every screen except {deviceName}");
+        return result == 0;
+    }
+
+    static string? GetSourceName(Win32.DISPLAYCONFIG_PATH_SOURCE_INFO sourceInfo)
+    {
+        var source = new Win32.DISPLAYCONFIG_SOURCE_DEVICE_NAME();
+        source.header.type = Win32.DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+        source.header.size = (uint)Marshal.SizeOf<Win32.DISPLAYCONFIG_SOURCE_DEVICE_NAME>();
+        source.header.adapterId = sourceInfo.adapterId;
+        source.header.id = sourceInfo.id;
+        return Win32.DisplayConfigGetDeviceInfo(ref source) == 0 ? source.viewGdiDeviceName : null;
+    }
+
     public static bool RestoreDisplayConfig(DisplaySnapshot snapshot)
     {
         var result = Win32.SetDisplayConfig((uint)snapshot.Paths.Length, snapshot.Paths, (uint)snapshot.Modes.Length, snapshot.Modes,
@@ -214,16 +268,8 @@ public static class Monitors
         {
             foreach (var path in QueryPaths(Win32.QDC_ONLY_ACTIVE_PATHS))
             {
-                var source = new Win32.DISPLAYCONFIG_SOURCE_DEVICE_NAME();
-                source.header.type = Win32.DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
-                source.header.size = (uint)Marshal.SizeOf<Win32.DISPLAYCONFIG_SOURCE_DEVICE_NAME>();
-                source.header.adapterId = path.sourceInfo.adapterId;
-                source.header.id = path.sourceInfo.id;
-                if (Win32.DisplayConfigGetDeviceInfo(ref source) != 0)
-                    continue;
-
-                if (GetTargetName(path.targetInfo) is { } name)
-                    result.TryAdd(source.viewGdiDeviceName, name);
+                if (GetSourceName(path.sourceInfo) is { } device && GetTargetName(path.targetInfo) is { } name)
+                    result.TryAdd(device, name);
             }
         }
         catch (Exception ex)

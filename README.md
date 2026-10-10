@@ -53,6 +53,9 @@ Pressing Back on Jellyfin's home screen also returns to the launcher.
   current main display as the main one. That's tried once each time the TV connects; set `display.autoExtend` to
   `false` to turn it off. When you quit, the display setup from before is put back (`display.restoreOnExit`); this
   only happens if Jens-TV did the extending, so a desktop you extended yourself is left alone.
+  "Turn off other screens while Jens-TV runs" (Settings, or `display.turnOffOtherScreens`) takes every other screen
+  off the desktop once the TV is on, like Win+P "Second screen only", so they go to standby. They always come back when
+  Jens-TV quits or the option is switched off. If Jens-TV crashes with screens off, press Win+P and pick a mode.
 - **Sound**: while Jens-TV runs, the chosen device becomes the Windows default output (so Jellyfin, Firefox and
   everything else play through the TV). The previous default comes back when Jens-TV exits. You can turn this off in Settings.
 - **YouTube**: Firefox starts with its own profile in `%LOCALAPPDATA%\JensTV\firefox-profile` and a TV user agent, so
@@ -75,7 +78,8 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
 ```jsonc
 {
   "display": { "monitorName": "LG TV SSCR2", "monitorDevice": "\\\\.\\DISPLAY2", "preferNonPrimary": true,
-               "autoExtend": true, "restoreOnExit": true },
+               "autoExtend": true, "restoreOnExit": true,
+               "turnOffOtherScreens": false },
   "audio":   { "deviceId": "{0.0.0.00000000}.{â€¦}", "deviceName": "LG TV (NVIDIA High Definition Audio)",
                "switchSystemDefault": true, "restoreOnExit": true },
   "firefox": {

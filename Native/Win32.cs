@@ -170,12 +170,26 @@ internal static class Win32
         public uint flags;
     }
 
+    public const uint DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE = 1;
+    public const uint DISPLAYCONFIG_PATH_MODE_IDX_INVALID = 0xffffffff;
+
     /// <summary>
-    /// Only the header fields are declared, but the struct is blittable and 64 bytes, so the full mode data survives a
-    /// QueryDisplayConfig → SetDisplayConfig round trip untouched.
+    /// Header plus the source-mode variant of the union (where the display sits on the desktop). The struct is
+    /// blittable and 64 bytes, so target-mode data survives a QueryDisplayConfig → SetDisplayConfig round trip untouched.
     /// </summary>
-    [StructLayout(LayoutKind.Sequential, Size = 64)]
-    public struct DISPLAYCONFIG_MODE_INFO { public uint infoType, id; public LUID adapterId; }
+    [StructLayout(LayoutKind.Explicit, Size = 64)]
+    public struct DISPLAYCONFIG_MODE_INFO
+    {
+        [FieldOffset(0)] public uint infoType;
+        [FieldOffset(4)] public uint id;
+        [FieldOffset(8)] public LUID adapterId;
+        // DISPLAYCONFIG_SOURCE_MODE (valid when infoType == SOURCE)
+        [FieldOffset(16)] public uint sourceWidth;
+        [FieldOffset(20)] public uint sourceHeight;
+        [FieldOffset(24)] public uint sourcePixelFormat;
+        [FieldOffset(28)] public int sourcePositionX;
+        [FieldOffset(32)] public int sourcePositionY;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct DISPLAYCONFIG_DEVICE_INFO_HEADER { public uint type, size; public LUID adapterId; public uint id; }
