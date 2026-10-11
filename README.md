@@ -67,6 +67,12 @@ Pressing Back on Jellyfin's home screen also returns to the launcher.
   cover YouTube. Firefox keeps them updated; removing a name uninstalls it. SponsorBlock is tested working on
   youtube.com/tv. To change an add-on's own settings, set `firefox.kiosk` to `false` temporarily to get the toolbar.
 - **Jellyfin**: runs in WebView2; logins persist in `%LOCALAPPDATA%\JensTV\WebView2`.
+- **Samsung TV (wake + standby)**: with a `samsungTv` section (Samsung Tizen TVs, 2016+), Jens-TV wakes the TV over
+  the network when it starts (or is brought forward with the launch hotkey), and can put it in standby when it quits
+  (both switches are in Settings). The TV needs to be on the network with "Power On with Mobile" (Settings → General →
+  Network → Expert Settings) switched on. The first time, the TV asks to allow "Jens-TV"; the token it hands out is
+  saved. The TV is found again by MAC address if its IP changes. Right after being switched off the TV needs a minute or
+  two before it reacts to wake packets. For diagnostics, `JensTV.exe --tv-key KEY_POWER` sends a remote key.
 - **Background slideshow**: choose a photo folder in Settings (the picker opens on the TV; use a mouse). Photos
   (jpg, png, webp, gif, bmp, avif, including subfolders) crossfade behind the menu with a slow zoom, darkened so
   the menu stays readable. The folder is re-scanned whenever the launcher reloads or settings change.
@@ -89,6 +95,10 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
     "extensions": ["sponsorblock"],   // addons.mozilla.org names, YouTube profile only
     "userAgent": "â€¦",             // must look like a TV/console for youtube.com/tv
     "extraPrefs": { "media.hardware-video-decoding.force-enabled": true }
+  },
+  "samsungTv": {                  // optional: wake the TV over the network, standby on quit
+    "host": "192.168.1.109", "mac": "A4:30:7A:73:16:85", "token": null,
+    "wakeOnStart": true, "turnOffOnExit": false
   },
   "slideshow": {                  // photos behind the launcher; folder can also be picked in Settings
     "enabled": true, "folder": "D:\\Photos\\Favourites", "intervalSeconds": 30,
@@ -152,6 +162,7 @@ icon should then be a logo with a transparent background (PNG, SVG or WebP) to l
 | --- | --- |
 | `MainWindow.cs` | TV window, WebView2 host, messaging with the UI, settings, Home handling |
 | `ExternalAppRunner.cs` | Launches/stops Firefox and other programs, keeps their windows on the TV |
+| `SamsungTv.cs` | Wake-on-LAN and the Samsung remote API (keys, pairing) |
 | `Native/Monitors.cs` | Display enumeration with EDID names |
 | `Audio/AudioDevices.cs` | Output device listing and default-device switching |
 | `Input/` | Global hotkeys and system-wide XInput "home" chord |

@@ -48,6 +48,7 @@ public sealed class MainWindow : Window
     bool _turnOffAttempted;
     bool _screensTurnedOff;
     bool _refocusAfterDisplayChange;
+    bool _tvWaking;
     string? _injectedScriptId;
     string? _spatnavScriptId;
     string? _mappedPhotoFolder;
@@ -141,6 +142,9 @@ public sealed class MainWindow : Window
         }
 
         ApplyConfig();
+
+        if (_config.SamsungTv?.WakeOnStart == true)
+            _ = WakeTvAsync();
     }
 
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -272,6 +276,10 @@ public sealed class MainWindow : Window
             _config.Slideshow.IntervalSeconds = seconds;
         if (Bool("transparentTiles") is { } transparentTiles)
             _config.TransparentTiles = transparentTiles;
+        if (_config.SamsungTv != null && Bool("tvWakeOnStart") is { } tvWakeOnStart)
+            _config.SamsungTv.WakeOnStart = tvWakeOnStart;
+        if (_config.SamsungTv != null && Bool("tvTurnOffOnExit") is { } tvTurnOffOnExit)
+            _config.SamsungTv.TurnOffOnExit = tvTurnOffOnExit;
         if (Bool("turnOffOtherScreens") is { } turnOffOtherScreens)
             _config.Display.TurnOffOtherScreens = turnOffOtherScreens;
         if (Bool("startWithWindows") is { } startWithWindows)
@@ -718,6 +726,89 @@ public sealed class MainWindow : Window
         _web.Focus();
     }
 
+    // ---------------------------------------------------------------- Samsung TV (wake, standby)
+
+    /// <summary>Wakes the TV over the network if it is in standby.</summary>
+    async Task WakeTvAsync()
+    {
+        var tv = _config.SamsungTv;
+        if (tv == null || (tv.Host == null && tv.Mac == null) || _tvWaking)
+            return;
+        _tvWaking = true;
+        try
+        {
+            var host = tv.Host;
+            var state = host != null ? await SamsungTv.GetPowerStateAsync(host) : null;
+            var wokeTv = state != "on";
+            if (state != "on")
+            {
+                Log.Info($"Waking the TV (it reports: {state ?? "no answer"})");
+                if (tv.Mac != null)
+                    SamsungTv.SendWakeOnLan(tv.Mac, host);
+
+                var powerKeySent = false;
+                for (var second = 1; second <= 45 && state != "on"; second++)
+                {
+                    await Task.Delay(1000);
+                    // Not answering at its address after a while: its IP may have changed, look it up by MAC.
+                    if (tv.Mac != null && (host == null || (state == null && second == 10)) && await SamsungTv.DiscoverAsync(tv.Mac) is { } found)
+                    {
+                        host = found;
+                        if (tv.Host != found)
+                        {
+                            tv.Host = found;
+                            SaveConfig();
+                        }
+                    }
+                    state = host != null ? await SamsungTv.GetPowerStateAsync(host) : null;
+
+                    // In network standby (answering, but not on) a few seconds after the wake packet: the power
+                    // key switches it on. Only once, since it toggles. Otherwise keep sending wake packets.
+                    if (state == "standby" && second >= 5 && !powerKeySent && host != null)
+                    {
+                        powerKeySent = true;
+                        Log.Info("The TV is in network standby; sending the power key");
+                        await SendTvKeysAsync(host, "KEY_POWER");
+                    }
+                    else if (state != "on" && second % 4 == 0 && tv.Mac != null)
+                        SamsungTv.SendWakeOnLan(tv.Mac, host);
+                }
+            }
+            if (state != "on" || host == null)
+            {
+                Log.Error("The TV didn't wake up");
+                Toast("Couldn't wake the TV. Is \"Power On with Mobile\" on?");
+                return;
+            }
+            if (wokeTv)
+                Log.Info("The TV is on");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Controlling the TV failed", ex);
+            Toast(ex is UnauthorizedAccessException ? ex.Message : "Couldn't control the TV over the network");
+        }
+        finally
+        {
+            _tvWaking = false;
+        }
+    }
+
+    /// <summary>Sends remote keys to the TV, saving the token the TV hands out the first time (after Allow).</summary>
+    async Task SendTvKeysAsync(string host, params string[] keys)
+    {
+        var tv = _config.SamsungTv!;
+        if (string.IsNullOrEmpty(tv.Token))
+            Toast("Press Allow on the TV to let Jens-TV control it");
+        var token = await SamsungTv.SendKeysAsync(host, tv.Token, keys);
+        if (!string.IsNullOrEmpty(token) && token != tv.Token)
+        {
+            tv.Token = token;
+            SaveConfig();
+            Log.Info("Saved the TV's access token");
+        }
+    }
+
     // ---------------------------------------------------------------- Firefox profiles and add-ons
 
     /// <summary>
@@ -833,7 +924,13 @@ public sealed class MainWindow : Window
     }
 
     /// <summary>Jens-TV was started again while running (launch hotkey): come to the front on the home screen.</summary>
-    public void ShowHome() => GoHome();
+    public void ShowHome()
+    {
+        GoHome();
+        // The TV may have been switched off since Jens-TV started.
+        if (_config.SamsungTv?.WakeOnStart == true)
+            _ = WakeTvAsync();
+    }
 
     void GoHome()
     {
@@ -852,6 +949,33 @@ public sealed class MainWindow : Window
         _shutDown = true;
 
         _runner.Stop(wait: true);
+
+        if (_config.SamsungTv is { TurnOffOnExit: true, Host: { } tvHost, Token: { } tvToken })
+        {
+            // Off the UI thread: we're blocking it here, and the awaits inside must not need it.
+            try
+            {
+                var done = Task.Run(async () =>
+                {
+                    var state = await SamsungTv.GetPowerStateAsync(tvHost);
+                    if (state == "on")
+                    {
+                        await SamsungTv.SendKeysAsync(tvHost, tvToken, ["KEY_POWER"]);
+                        Log.Info("Put the TV in standby");
+                    }
+                    else
+                    {
+                        Log.Info($"Not putting the TV in standby: it reports {state ?? "no answer"}");
+                    }
+                }).Wait(TimeSpan.FromSeconds(6));
+                if (!done)
+                    Log.Error("Putting the TV in standby timed out");
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Turning the TV off failed", ex);
+            }
+        }
         _hotkeys.Unregister();
         _tvKeys.Dispose();
         _gamepad.Stop();

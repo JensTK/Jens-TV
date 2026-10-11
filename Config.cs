@@ -9,6 +9,9 @@ public sealed class AppConfig
     public FirefoxSettings Firefox { get; set; } = new();
     public SlideshowSettings Slideshow { get; set; } = new();
 
+    /// <summary>Network control of a Samsung TV (wake it, put it in standby). Null when not set up.</summary>
+    public SamsungTvSettings? SamsungTv { get; set; }
+
     /// <summary>Global hotkeys that close the running app and return to the launcher.</summary>
     public List<string> HomeHotkeys { get; set; } = ["BrowserHome", "Ctrl+Alt+Home"];
 
@@ -150,6 +153,25 @@ public sealed class AudioSettings
 
     /// <summary>Put the previous default output back when Jens-TV exits.</summary>
     public bool RestoreOnExit { get; set; } = true;
+}
+
+/// <summary>Samsung (Tizen) TV control over the network. The TV needs "Power On with Mobile" switched on.</summary>
+public sealed class SamsungTvSettings
+{
+    /// <summary>The TV's IP address; found again by MAC address if it changes.</summary>
+    public string? Host { get; set; }
+
+    /// <summary>The TV's MAC address (Wi-Fi or wired, whichever it's connected with), for Wake-on-LAN.</summary>
+    public string? Mac { get; set; }
+
+    /// <summary>Handed out by the TV the first time you press Allow; saved automatically.</summary>
+    public string? Token { get; set; }
+
+    /// <summary>Wake the TV when Jens-TV starts (or is brought forward with the launch hotkey).</summary>
+    public bool WakeOnStart { get; set; } = true;
+
+    /// <summary>Put the TV in standby when Jens-TV quits.</summary>
+    public bool TurnOffOnExit { get; set; }
 }
 
 /// <summary>Photos from a folder shown as the launcher background.</summary>
