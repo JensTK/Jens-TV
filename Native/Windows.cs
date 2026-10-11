@@ -81,6 +81,43 @@ public static class WindowFinder
         return result;
     }
 
+    const long FrameStyles = Win32.WS_CAPTION | Win32.WS_THICKFRAME;
+
+    /// <summary>
+    /// Borderless full screen on the target monitor: not maximized (that leaves room for the taskbar), no caption or
+    /// sizing frame, exactly the monitor's size. Windows then treats it as a full-screen app and hides the taskbar
+    /// while it's in front. Idempotent, so it can be re-applied while the app settles.
+    /// </summary>
+    public static void MakeFullscreen(IntPtr hwnd, MonitorInfo target)
+    {
+        if (Win32.IsIconic(hwnd))
+            Win32.ShowWindow(hwnd, Win32.SW_RESTORE);
+        var style = Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE).ToInt64();
+        var t = target.Bounds;
+        Win32.GetWindowRect(hwnd, out var r);
+        var done = (style & FrameStyles) == 0 && !Win32.IsZoomed(hwnd)
+            && r.Left == t.X && r.Top == t.Y && r.Width == t.Width && r.Height == t.Height;
+        if (done)
+            return;
+
+        // Clear the maximized bit directly: un-maximizing with ShowWindow makes Spotify (CEF) re-maximize itself.
+        Win32.SetWindowLongPtr(hwnd, Win32.GWL_STYLE, new IntPtr(style & ~(FrameStyles | Win32.WS_MAXIMIZE)));
+        Win32.SetWindowPos(hwnd, IntPtr.Zero, t.X, t.Y, t.Width, t.Height,
+            Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+    }
+
+    /// <summary>Undoes <see cref="MakeFullscreen"/>: frame back, maximized.</summary>
+    public static void RestoreFrame(IntPtr hwnd)
+    {
+        var style = Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE).ToInt64();
+        if ((style & FrameStyles) == FrameStyles)
+            return;
+        Win32.SetWindowLongPtr(hwnd, Win32.GWL_STYLE, new IntPtr(style | FrameStyles));
+        Win32.SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+        Win32.ShowWindow(hwnd, Win32.SW_MAXIMIZE);
+    }
+
     /// <summary>
     /// Moves a window onto the target monitor. Borderless fullscreen windows (Firefox kiosk) are resized to cover it;
     /// maximized windows (or all, with <paramref name="maximize"/>) are maximized there; normal windows are centred.

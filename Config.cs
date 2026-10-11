@@ -115,7 +115,7 @@ public sealed class AppConfig
         Type = "exe",
         Path = FindSpotify(),
         ProcessName = "Spotify",
-        Maximize = true,
+        Fullscreen = true,
         Zoom = 1.5,
         Icon = "spotify",
         Description = "Music and podcasts",
@@ -296,6 +296,12 @@ public sealed class AppEntry
 
     /// <summary>exe apps: maximize the window on the TV.</summary>
     public bool Maximize { get; set; }
+
+    /// <summary>
+    /// exe apps: borderless full screen on the TV (covers the taskbar; overrides maximize). The window frame is put back
+    /// before the app is closed, so it doesn't remember the full-screen state.
+    /// </summary>
+    public bool Fullscreen { get; set; }
 
     /// <summary>
     /// exe apps built on Chromium/Electron (Spotify, Discord …): interface size relative to normal on the TV,

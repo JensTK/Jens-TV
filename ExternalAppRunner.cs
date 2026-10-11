@@ -159,7 +159,7 @@ public sealed class ExternalAppRunner
         _app = app;
 
         if (target != null)
-            StartPlacement(process.Id, target, app.Maximize);
+            StartPlacement(process.Id, target, app);
     }
 
     /// <summary>Brings the running app back in front (e.g. Spotify that was left playing in the background).</summary>
@@ -184,7 +184,7 @@ public sealed class ExternalAppRunner
         }
 
         if (target != null && _app.MoveToTv)
-            StartPlacement(process.Id, target, _app.Maximize);
+            StartPlacement(process.Id, target, _app);
     }
 
     /// <summary>The running app's visible top-level windows (empty when nothing runs).</summary>
@@ -210,21 +210,23 @@ public sealed class ExternalAppRunner
         var process = _process;
         if (target == null || _app is not { MoveToTv: true } app || process is not { HasExited: false })
             return;
-        StartPlacement(process.Id, target, app.Maximize);
+        StartPlacement(process.Id, target, app);
     }
 
-    void StartPlacement(int pid, MonitorInfo target, bool maximize)
+    void StartPlacement(int pid, MonitorInfo target, AppEntry app)
     {
         _placement?.Cancel();
         _placement = new CancellationTokenSource();
         var token = _placement.Token;
-        _ = Task.Run(() => KeepOnMonitorAsync(pid, target, maximize, token));
+        var (maximize, fullscreen) = (app.Maximize, app.Fullscreen);
+        _ = Task.Run(() => KeepOnMonitorAsync(pid, target, maximize, fullscreen, token));
     }
 
     public void Stop(bool wait = false)
     {
         _generation++;
         var process = Interlocked.Exchange(ref _process, null);
+        var app = _app;
         _app = null;
         _placement?.Cancel();
         if (process == null)
@@ -237,7 +239,13 @@ public sealed class ExternalAppRunner
                 if (process.HasExited)
                     return;
                 foreach (var hwnd in WindowFinder.TopLevelWindows(ProcessTree.Get(process.Id)))
+                {
+                    // Put the normal window frame back first: apps like Spotify remember their window state, and the
+                    // desktop copy shouldn't open frameless at TV size next time.
+                    if (app?.Fullscreen == true)
+                        WindowFinder.RestoreFrame(hwnd);
                     Win32.PostMessage(hwnd, Win32.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+                }
                 if (!process.WaitForExit(5000))
                     process.Kill(entireProcessTree: true);
             }
@@ -259,7 +267,7 @@ public sealed class ExternalAppRunner
     /// Watches the app's windows for a while after launch and moves them to the TV. Firefox in kiosk mode goes
     /// fullscreen on whichever monitor it opened on, so this keeps correcting until things settle.
     /// </summary>
-    static async Task KeepOnMonitorAsync(int rootPid, MonitorInfo target, bool maximize, CancellationToken token)
+    static async Task KeepOnMonitorAsync(int rootPid, MonitorInfo target, bool maximize, bool fullscreenApp, CancellationToken token)
     {
         var deadline = DateTime.UtcNow.AddSeconds(20);
         var fullscreen = new HashSet<IntPtr>();
@@ -271,7 +279,10 @@ public sealed class ExternalAppRunner
             {
                 foreach (var hwnd in WindowFinder.TopLevelWindows(ProcessTree.Get(rootPid)))
                 {
-                    WindowFinder.EnsureOnMonitor(hwnd, target, fullscreen, maximize);
+                    if (fullscreenApp)
+                        WindowFinder.MakeFullscreen(hwnd, target);
+                    else
+                        WindowFinder.EnsureOnMonitor(hwnd, target, fullscreen, maximize);
                     if (!focused)
                         focused = Win32.SetForegroundWindow(hwnd);
                 }

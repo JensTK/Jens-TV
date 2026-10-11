@@ -5,7 +5,7 @@ It runs fullscreen on the TV, is driven by keyboard, remote or gamepad, and laun
 
 - **Jellyfin** inside the TV window (Jellyfin's web client, forced into its TV layout)
 - **YouTube** via `youtube.com/tv` in a dedicated Firefox kiosk window placed on the TV
-- **Spotify** desktop app, maximized on the TV
+- **Spotify** desktop app, full screen on the TV
 - **F1 TV** website inside the TV window (WebView2 has the Widevine/PlayReady DRM it needs; F1 blocks Firefox),
   navigable with arrow keys
 - anything else you add (programs, shortcuts, `steam://` URIs, other web apps)
@@ -145,7 +145,7 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
 
     { "id": "spotify",  "name": "Spotify",  "type": "exe", "processName": "Spotify",
       "path": "shell:AppsFolder\\SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify",   // Store app; or the classic Spotify.exe path
-      "maximize": true, "zoom": 1.5, "icon": "spotify" },
+      "fullscreen": true, "zoom": 1.5, "icon": "spotify" },
 
     // more examples:
     { "id": "steam", "name": "Steam", "type": "exe", "path": "steam://open/bigpicture",
@@ -169,7 +169,8 @@ App types:
   agent there. New profiles get an invisible first run in the background so Firefox can download Widevine (DRM).
 - `exe`: starts a program (`path` + `args`). Non-`.exe` paths (shortcuts, Store apps, URIs) go through the shell; set
   `processName` (without `.exe`) so Jens-TV can find the real process, move it and close it. `moveToTv` moves the
-  window to the TV, `maximize` maximizes it there. `path` can also be `shell:AppsFolder\<AppID>` for a Store app
+  window to the TV, `maximize` maximizes it there, `fullscreen` makes it borderless and covers the whole TV
+  so the taskbar is hidden (the frame is put back before it's closed). `path` can also be `shell:AppsFolder\<AppID>` for a Store app
   (find the ID with PowerShell `Get-StartApps`), which, unlike a URI, passes `args` through. `zoom` (e.g. `1.5`)
   enlarges Chromium/Electron apps such as Spotify for that launch only, on top of the TV's Windows scaling.
 
