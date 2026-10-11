@@ -297,7 +297,6 @@ public sealed class MainWindow : Window
 
         SaveConfig();
         ApplyConfig();
-        Toast("Settings saved");
     }
 
     void OpenConfigFile()

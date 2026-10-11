@@ -102,9 +102,17 @@ function el(tag, className, text) {
 
 function onHostMessage(msg) {
   if (msg.type === 'state') {
+    const firstState = !state;
     state = msg;
     renderHome();
     renderStatus();
+    // Settings was open when the page reloaded (a new photo folder does that): reopen it on the same row.
+    const reopenAt = firstState ? readStored('settingsReopen', null) : null;
+    if (reopenAt !== null) {
+      openSettings();
+      settingsIndex = Math.min(reopenAt, settingsRows.length - 1);
+      updateSettingsFocus();
+    }
     // Don't yank the rows out from under someone typing an address.
     if (screen === 'settings' && document.activeElement?.tagName !== 'INPUT') renderSettings();
   } else if (msg.type === 'toast') {
@@ -115,6 +123,7 @@ function onHostMessage(msg) {
     if (draft) {
       draft.slideshowFolder = msg.path;
       renderSettings();
+      saveSettings(true);
     }
   }
 }
@@ -290,6 +299,7 @@ function focusTop(target) {
 }
 
 function quit() {
+  if (screen === 'settings') closeSettings(); // saves a pending change first
   toast('Closing Jens-TV…');
   send({ type: 'quit' });
 }
@@ -339,15 +349,36 @@ function openSettings() {
 }
 
 function closeSettings() {
-  if (document.activeElement) document.activeElement.blur();
+  if (document.activeElement) document.activeElement.blur(); // commits an address being edited (saves via 'change')
+  flushSettings();
+  writeStored('settingsReopen', null);
   screen = 'home';
   draft = null;
   els.settings.classList.remove('active');
 }
 
-function saveSettings() {
+// Settings apply as they change; there's no Save button. Choices are saved shortly after the last press, so
+// cycling through monitors or sound devices doesn't apply every option on the way past.
+let saveTimer = 0;
+
+function saveSettings(immediately) {
+  clearTimeout(saveTimer);
+  saveTimer = immediately ? 0 : setTimeout(flushSettings, 700);
+  if (immediately) sendSettings();
+}
+
+function flushSettings() {
+  if (!saveTimer) return;
+  clearTimeout(saveTimer);
+  saveTimer = 0;
+  sendSettings();
+}
+
+function sendSettings() {
+  saveTimer = 0;
+  if (!draft) return;
+  writeStored('settingsReopen', settingsIndex); // a new photo folder reloads the page: come back to this row
   send({ type: 'saveSettings', ...draft });
-  closeSettings();
 }
 
 function audioOptions() {
@@ -398,10 +429,8 @@ function buildSettingsRows() {
     .forEach((a, i) => rows.push({ kind: 'text', label: `${a.name} address`, appId: a.id, gap: i === 0 }));
 
   rows.push(
-    { kind: 'button', label: 'Save', action: saveSettings, gap: true },
-    { kind: 'button', label: 'Cancel', action: closeSettings },
-    { kind: 'button', label: 'Edit config file (opens on the PC)', action: () => send({ type: 'openConfig' }) },
-    { kind: 'button', label: 'Quit Jens-TV', action: () => send({ type: 'quit' }), danger: true },
+    { kind: 'button', label: 'Edit config file (opens on the PC)', action: () => send({ type: 'openConfig' }), gap: true },
+    { kind: 'button', label: 'Quit Jens-TV', action: quit, danger: true },
   );
   return rows;
 }
@@ -425,6 +454,7 @@ function renderSettings() {
       input.spellcheck = false;
       input.value = draft.urls[row.appId];
       input.addEventListener('input', () => { draft.urls[row.appId] = input.value; });
+      input.addEventListener('change', () => saveSettings(true)); // when leaving the field
       input.addEventListener('focus', () => { settingsIndex = i; updateSettingsFocus(); });
       node.append(input);
     }
@@ -465,6 +495,7 @@ function changeRow(delta) {
     return;
   }
   renderSettings();
+  saveSettings(row.kind === 'toggle');
 }
 
 function activateRow() {
