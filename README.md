@@ -51,6 +51,13 @@ buttons you want (e.g. Select + Start) and let go. Holding them for half a secon
 reacts to the controller you set it with, reads HID input in the background (Raw Input), and only listens while a
 shortcut is set. Left/Right on the row switches it off.
 
+**Start Jens-TV from the controller:** with a home shortcut set, switch on "Start Jens-TV with the shortcut" in
+Settings. A small tray program (`JensTV.Listener.exe`, starts with Windows) then starts Jens-TV when the shortcut is held
+for **1.5 s** (longer than the 0.5 s for going home, so it doesn't happen by accident). It sleeps until Windows delivers
+controller input: about 6 MB of memory and ~0.2 % of one core while a controller streams reports, nothing while it's
+asleep. Right-click the tray icon to open Jens-TV or stop it. With Visual Studio's C++ build tools installed,
+`dotnet publish Listener -r win-x64` makes a NativeAOT build that needs even less.
+
 Returning home closes the running app (e.g. YouTube's Firefox) and brings the launcher back. The plain Home key
 (`tvHotkeys`) only does this while Jens-TV or the app it launched is in front, so it keeps working normally in
 other programs on the PC. The media-keyboard Home key and Ctrl+Alt+Home (`homeHotkeys`) work from anywhere.
@@ -121,6 +128,7 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
   "gamepadHome": true,
   "controller": null,             // only this controller drives the launcher (Settings → Controller)
   "homeChord": null,              // e.g. { "device": "8BitDo Ultimate 2 Wireless", "buttons": [11, 12] } (learned in Settings)
+  "controllerLaunch": false,      // tray listener that starts Jens-TV with the home shortcut (held 1.5 s)
   "startWithWindows": false,
   "launchHotkey": "Ctrl+Alt+T",   // Windows shortcut key on the Start Menu shortcut; "" = none
   "transparentTiles": false,      // logos without tile backgrounds; also a switch in Settings
@@ -179,6 +187,7 @@ icon should then be a logo with a transparent background (PNG, SVG or WebP) to l
 | `Native/Monitors.cs` | Display enumeration with EDID names |
 | `Audio/AudioDevices.cs` | Output device listing and default-device switching |
 | `Input/` | Global hotkeys, XInput "home" chord, HID/DirectInput home shortcut (Raw Input) |
+| `Listener/` | Tray program that starts Jens-TV from the controller (Raw Input, no UI framework) |
 | `wwwroot/` | Launcher UI (`index.html`, `app.css`, `app.js`) and `inject.js` (runs inside Jellyfin) |
 
 Logs: `%LOCALAPPDATA%\JensTV\jenstv.log`.

@@ -9,6 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>jenstv.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +18,14 @@
 
   <ItemGroup>
     <None Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The tray listener is its own project (below); keep its sources out of this one. -->
+    <Compile Remove="Listener\**" />
+    <None Remove="Listener\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Built alongside: JensTV.Listener.exe lands next to JensTV.exe (its OutDir), not referenced as a library. -->
+    <ProjectReference Include="Listener\JensTV.Listener.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

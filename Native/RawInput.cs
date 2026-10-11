@@ -8,7 +8,7 @@ internal static class RawInput
 {
     public const int WM_INPUT = 0x00FF;
     public const uint RIDEV_REMOVE = 0x00000001, RIDEV_INPUTSINK = 0x00000100;
-    public const uint RID_INPUT = 0x10000003;
+    public const uint RID_INPUT = 0x10000003, RID_HEADER = 0x10000005;
     public const uint RIDI_PREPARSEDDATA = 0x20000005, RIDI_DEVICENAME = 0x20000007;
     public const uint RIM_TYPEHID = 2;
     public const ushort HID_USAGE_PAGE_GENERIC = 0x01, HID_USAGE_JOYSTICK = 0x04, HID_USAGE_GAMEPAD = 0x05;

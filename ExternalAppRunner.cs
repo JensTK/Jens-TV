@@ -350,6 +350,43 @@ public static class FirefoxSupport
     }
 }
 
+/// <summary>
+/// The tray listener (JensTV.Listener.exe next to JensTV.exe) that starts Jens-TV when the controller home shortcut is
+/// held: registered to start with Windows and running, or neither.
+/// </summary>
+public static class ControllerListener
+{
+    const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    const string ValueName = "JensTV Listener";
+    static string ExePath => System.IO.Path.Combine(AppContext.BaseDirectory, "JensTV.Listener.exe");
+
+    public static void Apply(bool enabled)
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(RunKey);
+        if (enabled && File.Exists(ExePath))
+        {
+            key.SetValue(ValueName, $"\"{ExePath}\"");
+            if (!IsRunning())
+                Process.Start(new ProcessStartInfo(ExePath) { UseShellExecute = false })?.Dispose();
+        }
+        else
+        {
+            if (key.GetValue(ValueName) != null)
+                key.DeleteValue(ValueName);
+            if (IsRunning() && File.Exists(ExePath))
+                Process.Start(new ProcessStartInfo(ExePath, "--quit") { UseShellExecute = false })?.Dispose();
+        }
+    }
+
+    static bool IsRunning()
+    {
+        if (!Mutex.TryOpenExisting(@"Local\JensTV.Listener", out var mutex))
+            return false;
+        mutex.Dispose();
+        return true;
+    }
+}
+
 public static class StartupRegistration
 {
     const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";

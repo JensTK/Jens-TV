@@ -35,6 +35,11 @@ public sealed class AppConfig
     /// </summary>
     public HomeChordSettings? HomeChord { get; set; }
 
+    /// <summary>
+    /// Run the tray listener (starts with Windows) that starts Jens-TV when the home shortcut is held for 1.5 s.
+    /// </summary>
+    public bool ControllerLaunch { get; set; }
+
     public bool StartWithWindows { get; set; }
 
     /// <summary>

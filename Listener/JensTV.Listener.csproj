@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tiny tray program that starts Jens-TV when the controller home shortcut is held. No WPF/WinForms, only Win32
+    calls, and it sleeps in GetMessage until Windows delivers controller input.
+    Built next to JensTV.exe. With Visual Studio's C++ build tools installed, `dotnet publish -r win-x64` makes a
+    NativeAOT build (a few MB of RAM, no .NET runtime to load); otherwise it runs as a regular, trimmed-down .NET app.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>JensTV.Listener</AssemblyName>
+    <RootNamespace>JensTV.Listener</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>..\jenstv.ico</ApplicationIcon>
+    <OutDir>$(MSBuildThisFileDirectory)..\bin\$(Configuration)\net10.0-windows\</OutDir>
+
+    <!-- Keep memory low: no culture data, no background GC thread, no profile-guided recompilation. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Shared with Jens-TV: Raw Input + HID report parsing. -->
+    <Compile Include="..\Native\RawInput.cs" Link="RawInput.cs" />
+  </ItemGroup>
+
+</Project>

@@ -206,6 +206,15 @@ public sealed class MainWindow : Window
             Log.Error("Updating start-with-Windows failed", ex);
         }
 
+        try
+        {
+            ControllerListener.Apply(_config.ControllerLaunch);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Updating the controller listener failed", ex);
+        }
+
         PrepareFirefoxProfiles();
 
         _launchHotkeyError = null;
@@ -286,6 +295,8 @@ public sealed class MainWindow : Window
             _config.Slideshow.IntervalSeconds = seconds;
         if (s.TryGetProperty("controller", out var controller) && controller.ValueKind is JsonValueKind.String or JsonValueKind.Null)
             _config.Controller = string.IsNullOrWhiteSpace(controller.GetString()) ? null : controller.GetString();
+        if (Bool("controllerLaunch") is { } controllerLaunch)
+            _config.ControllerLaunch = controllerLaunch;
         if (Bool("transparentTiles") is { } transparentTiles)
             _config.TransparentTiles = transparentTiles;
         if (_config.SamsungTv != null && Bool("tvWakeOnStart") is { } tvWakeOnStart)
