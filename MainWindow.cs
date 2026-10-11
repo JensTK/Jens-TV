@@ -85,6 +85,7 @@ public sealed class MainWindow : Window
         {
             _refreshDebounce.Stop();
             PlaceOnTarget();
+            _runner.Reposition(_target); // a running app (YouTube) may have been moved off the TV too
             _audio.Apply(_config.Audio);
             SendState();
 

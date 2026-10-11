@@ -186,6 +186,18 @@ public sealed class ExternalAppRunner
             StartPlacement(process.Id, target, _app.Maximize);
     }
 
+    /// <summary>
+    /// Displays changed while the app runs (e.g. the TV re-connecting as it wakes, which makes Windows park its windows
+    /// on another screen): put the app back on the TV and in front again.
+    /// </summary>
+    public void Reposition(MonitorInfo? target)
+    {
+        var process = _process;
+        if (target == null || _app is not { MoveToTv: true } app || process is not { HasExited: false })
+            return;
+        StartPlacement(process.Id, target, app.Maximize);
+    }
+
     void StartPlacement(int pid, MonitorInfo target, bool maximize)
     {
         _placement?.Cancel();
