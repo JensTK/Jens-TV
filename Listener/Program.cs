@@ -279,13 +279,13 @@ public static unsafe class Program
         var data = TrayData();
         fixed (char* source = Tooltip)
             Buffer.MemoryCopy(source, data.szTip, 128 * sizeof(char), Tooltip.Length * sizeof(char));
-        Shell_NotifyIcon(message, ref data);
+        Shell_NotifyIcon(message, &data);
     }
 
     static void RemoveTrayIcon()
     {
         var data = TrayData();
-        Shell_NotifyIcon(2 /* NIM_DELETE */, ref data);
+        Shell_NotifyIcon(2 /* NIM_DELETE */, &data);
     }
 
     static void ShowMenu()
@@ -318,7 +318,9 @@ public static unsafe class Program
     [StructLayout(LayoutKind.Sequential)]
     struct POINT { public int X, Y; }
 
-    [StructLayout(LayoutKind.Sequential)]
+    // CharSet.Unicode makes the char buffers 2-byte and the struct blittable. Without it the default ANSI marshalling
+    // converts only the first element of each fixed char buffer, which showed the tooltip as just "J".
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     struct NOTIFYICONDATA
     {
         public uint cbSize;
@@ -358,6 +360,6 @@ public static unsafe class Program
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(int pid);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern uint ExtractIconEx(string file, int index, IntPtr large, out IntPtr small, uint count);
-    // The W (Unicode) version explicitly: without it the ANSI one is called and reads only the first character.
-    [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconW")] static extern bool Shell_NotifyIcon(uint message, ref NOTIFYICONDATA data);
+    // The W (Unicode) version, taking the struct by pointer so it's passed exactly as laid out (no marshalling).
+    [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconW")] static extern bool Shell_NotifyIcon(uint message, NOTIFYICONDATA* data);
 }
