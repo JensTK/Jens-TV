@@ -107,10 +107,11 @@ function onHostMessage(msg) {
     renderHome();
     renderStatus();
     // Settings was open when the page reloaded (a new photo folder does that): reopen it on the same row.
-    const reopenAt = firstState ? readStored('settingsReopen', null) : null;
-    if (reopenAt !== null) {
+    const reopen = firstState ? readStored('settingsReopen', null) : null;
+    if (reopen) writeStored('settingsReopen', null);
+    if (reopen && typeof reopen.row === 'number' && Date.now() - reopen.at < 15000) {
       openSettings();
-      settingsIndex = Math.min(reopenAt, settingsRows.length - 1);
+      settingsIndex = Math.min(reopen.row, settingsRows.length - 1);
       updateSettingsFocus();
     }
     // Don't yank the rows out from under someone typing an address.
@@ -119,6 +120,11 @@ function onHostMessage(msg) {
     toast(msg.text);
   } else if (msg.type === 'slideshow') {
     startSlideshow(msg);
+  } else if (msg.type === 'homeChordLearned') {
+    chordLearning = false;
+    toast(msg.ok ? 'Home shortcut saved: hold those buttons from any app to come back here'
+      : 'No buttons held; home shortcut unchanged');
+    if (screen === 'settings') renderSettings();
   } else if (msg.type === 'folderPicked') {
     if (draft) {
       draft.slideshowFolder = msg.path;
@@ -329,6 +335,7 @@ function openSettings() {
     audioDeviceId: state.config.audio.deviceId || currentDefault,
     switchAudio: state.config.audio.switchSystemDefault,
     startWithWindows: state.config.startWithWindows,
+    controller: state.config.controller || null,
     transparentTiles: state.config.transparentTiles,
     turnOffOtherScreens: state.config.display.turnOffOtherScreens,
     tvWakeOnStart: !!(state.config.samsungTv && state.config.samsungTv.wakeOnStart),
@@ -351,6 +358,7 @@ function openSettings() {
 function closeSettings() {
   if (document.activeElement) document.activeElement.blur(); // commits an address being edited (saves via 'change')
   flushSettings();
+  learning = null;
   writeStored('settingsReopen', null);
   screen = 'home';
   draft = null;
@@ -377,7 +385,9 @@ function flushSettings() {
 function sendSettings() {
   saveTimer = 0;
   if (!draft) return;
-  writeStored('settingsReopen', settingsIndex); // a new photo folder reloads the page: come back to this row
+  // A new photo folder reloads the page: come back to this row. Timestamped so a later start of Jens-TV (closed
+  // while Settings was open) doesn't reopen Settings.
+  writeStored('settingsReopen', { row: settingsIndex, at: Date.now() });
   send({ type: 'saveSettings', ...draft });
 }
 
@@ -401,6 +411,22 @@ function intervalOptions(current) {
   }));
 }
 
+// "Any controller", then connected controllers by name. The saved value is kept as-is when a connected controller
+// has the same name, so the current choice is found even if its vendor/product details differ.
+function controllerOptions() {
+  const saved = draft.controller;
+  const options = [{ value: null, label: 'Any controller' }];
+  for (const gp of connectedPads()) {
+    const name = controllerName(gp.id);
+    if (options.some((o) => o.value && controllerName(o.value) === name)) continue;
+    options.push({ value: saved && controllerName(saved) === name ? saved : gp.id, label: name });
+  }
+  if (saved && !options.some((o) => o.value === saved)) {
+    options.push({ value: saved, label: `${controllerName(saved)} (not connected)` });
+  }
+  return options;
+}
+
 function buildSettingsRows() {
   const rows = [
     {
@@ -415,6 +441,8 @@ function buildSettingsRows() {
     { kind: 'select', label: 'Sound output', key: 'audioDeviceId', options: audioOptions },
     { kind: 'toggle', label: 'Use this sound output while Jens-TV runs', key: 'switchAudio' },
     { kind: 'toggle', label: 'Start with Windows', key: 'startWithWindows' },
+    { kind: 'select', label: 'Controller (OK, then press a button on it)', key: 'controller', options: controllerOptions, learn: true },
+    { kind: 'chord', label: 'Home shortcut on controller' },
     { kind: 'toggle', label: 'Transparent app tiles', key: 'transparentTiles', gap: true },
     { kind: 'toggle', label: 'Background slideshow', key: 'slideshowEnabled' },
     { kind: 'folder', label: 'Photo folder', key: 'slideshowFolder' },
@@ -441,7 +469,13 @@ function renderSettings() {
     const node = el('div', `row ${row.kind}${row.gap ? ' gap' : ''}${row.danger ? ' danger' : ''}`);
     node.append(el('span', 'label', row.label));
 
-    if (row.kind === 'select') {
+    if (row.learn && learning) {
+      node.append(el('span', 'value', 'Press any button on the controller to use…'));
+    } else if (row.kind === 'chord') {
+      const chord = state.config.homeChord;
+      node.append(el('span', 'value', chordLearning ? 'Hold the buttons you want, then let go…'
+        : chord ? `Hold button ${chord.buttons.join(' + ')} · ${chord.device}` : 'Off (OK to set)'));
+    } else if (row.kind === 'select') {
       const option = row.options().find((o) => o.value === draft[row.key]);
       node.append(el('span', 'value', option ? option.label : 'None'));
     } else if (row.kind === 'toggle') {
@@ -491,6 +525,9 @@ function changeRow(delta) {
     draft[row.key] = options[(current + delta + options.length) % options.length].value;
   } else if (row.kind === 'toggle') {
     draft[row.key] = !draft[row.key];
+  } else if (row.kind === 'chord') {
+    if (state.config.homeChord) send({ type: 'clearHomeChord' }); // Left/Right switches the shortcut off
+    return;
   } else {
     return;
   }
@@ -500,7 +537,14 @@ function changeRow(delta) {
 
 function activateRow() {
   const row = settingsRows[settingsIndex];
-  if (row.kind === 'select' || row.kind === 'toggle') {
+  if (row.learn) {
+    startLearningController();
+  } else if (row.kind === 'chord') {
+    // The host listens to the controllers (it can do so in the background); we just stop acting on them meanwhile.
+    chordLearning = true;
+    send({ type: 'learnHomeChord' });
+    renderSettings();
+  } else if (row.kind === 'select' || row.kind === 'toggle') {
     changeRow(1);
   } else if (row.kind === 'folder') {
     send({ type: 'pickFolder', current: draft[row.key] });
@@ -523,21 +567,19 @@ function handleAction(action) {
       else if (action === 'left' && topFocus === 'power') focusTop('settings');
       else if (action === 'down' || action === 'back' || action === 'left') focusTop(null);
       else if (action === 'ok') activateHome();
-      else if (action === 'menu') openSettings();
       return;
     }
     if (action === 'left') moveHome(-1);
     else if (action === 'right') moveHome(1);
     else if (action === 'up') focusTop('settings');
     else if (action === 'ok') activateHome();
-    else if (action === 'menu') openSettings();
   } else {
     if (action === 'up') moveSettings(-1);
     else if (action === 'down') moveSettings(1);
     else if (action === 'left') changeRow(-1);
     else if (action === 'right') changeRow(1);
     else if (action === 'ok') activateRow();
-    else if (action === 'back' || action === 'menu') closeSettings();
+    else if (action === 'back') closeSettings();
   }
 }
 
@@ -545,7 +587,6 @@ const KEY_ACTIONS = {
   ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
   Enter: 'ok', ' ': 'ok', MediaPlayPause: 'ok',
   Escape: 'back', Backspace: 'back', BrowserBack: 'back',
-  ContextMenu: 'menu',
 };
 
 document.addEventListener('keydown', (e) => {
@@ -566,32 +607,118 @@ document.addEventListener('keydown', (e) => {
   handleAction(action);
 });
 
-// Gamepad (standard mapping): D-pad / left stick, A = OK, B = back, Start = settings.
+// Gamepad: D-pad (buttons, or a hat switch on DirectInput controllers) / left stick, A = OK, B = back.
 const REPEATING = new Set(['up', 'down', 'left', 'right']);
 const pad = { held: {}, nextRepeat: {} };
 
-function readPads() {
-  const pressed = {};
-  for (const gp of navigator.getGamepads ? navigator.getGamepads() : []) {
-    if (!gp || !gp.connected) continue;
-    const b = (i) => gp.buttons[i] && gp.buttons[i].pressed;
-    const [x = 0, y = 0] = gp.axes;
-    if (b(12) || y < -0.6) pressed.up = true;
-    if (b(13) || y > 0.6) pressed.down = true;
-    if (b(14) || x < -0.6) pressed.left = true;
-    if (b(15) || x > 0.6) pressed.right = true;
-    if (b(0)) pressed.ok = true;
-    if (b(1)) pressed.back = true;
-    if (b(9) && !b(8)) pressed.menu = true; // Back+Start is the host's "home" chord
+// Controllers are matched by name only: the bracketed vendor/product part differs between dongle, Bluetooth and cable.
+const controllerName = (id) => (id || '').replace(/\s*\(.*$/, '').trim() || id || '';
+
+function connectedPads() {
+  return [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter((gp) => gp && gp.connected);
+}
+
+// config.controller set: only that controller counts; otherwise any.
+function padAllowed(gp) {
+  const wanted = state && state.config.controller;
+  return !wanted || controllerName(gp.id) === controllerName(wanted);
+}
+
+// Controllers the browser doesn't recognise (mapping "", e.g. DirectInput mode) report the D-pad as a "hat switch"
+// axis instead of buttons 12–15: 8 directions spread over -1…1 (up = -1, then clockwise in steps of 2/7) and a
+// resting value outside that range. Any axis seen resting outside -1…1 is treated as a hat.
+const hatAxes = new Map(); // gamepad index → indices of its hat axes
+
+function hatDirection(gp) {
+  if (gp.mapping === 'standard') return null;
+  let hats = hatAxes.get(gp.index);
+  if (!hats) hatAxes.set(gp.index, (hats = new Set()));
+  gp.axes.forEach((value, i) => { if (Math.abs(value) > 1.05) hats.add(i); });
+  for (const i of hats) {
+    const value = gp.axes[i];
+    if (Math.abs(value) <= 1.0001) return Math.round((value + 1) * 3.5) % 8; // 0 = up, 2 = right, 4 = down, 6 = left
   }
+  return null;
+}
+
+function readPadsOf(gp) {
+  const pressed = {};
+  const b = (i) => gp.buttons[i] && gp.buttons[i].pressed;
+  const [x = 0, y = 0] = gp.axes;
+  const hat = hatDirection(gp);
+  const hatIs = (...positions) => hat !== null && positions.includes(hat);
+  if (b(12) || y < -0.6 || hatIs(7, 0, 1)) pressed.up = true;
+  if (b(13) || y > 0.6 || hatIs(3, 4, 5)) pressed.down = true;
+  if (b(14) || x < -0.6 || hatIs(5, 6, 7)) pressed.left = true;
+  if (b(15) || x > 0.6 || hatIs(1, 2, 3)) pressed.right = true;
+  if (b(0)) pressed.ok = true;
+  if (b(1)) pressed.back = true;
   return pressed;
 }
 
+function readPads() {
+  const pressed = {};
+  for (const gp of connectedPads())
+    if (padAllowed(gp)) Object.assign(pressed, readPadsOf(gp));
+  return pressed;
+}
+
+// "Press a button on the controller you want": Settings → Controller → OK. Buttons already held when it starts
+// (the OK press itself) don't count until released.
+let learning = null;
+let chordLearning = false; // the host is recording a home-shortcut combination
+
+function startLearningController() {
+  learning = {
+    until: performance.now() + 10000,
+    held: new Map(connectedPads().map((gp) => [gp.index, new Set(gp.buttons.flatMap((b, i) => (b.pressed ? [i] : [])))])),
+  };
+  renderSettings();
+}
+
+function checkLearning(now) {
+  if (now > learning.until) {
+    learning = null;
+    renderSettings();
+    toast('No button pressed; controller unchanged');
+    return;
+  }
+  for (const gp of connectedPads()) {
+    const held = learning.held.get(gp.index) || new Set();
+    learning.held.set(gp.index, held);
+    for (let i = 0; i < gp.buttons.length; i++) {
+      if (!gp.buttons[i].pressed) { held.delete(i); continue; }
+      if (held.has(i)) continue;
+      learning = null;
+      if (draft) {
+        draft.controller = gp.id;
+        renderSettings();
+        saveSettings(true);
+      }
+      toast(`Jens-TV now only listens to ${controllerName(gp.id)}`);
+      // Swallow this press so it doesn't also act on the settings row.
+      Object.keys(readPadsOf(gp)).forEach((a) => { pad.held[a] = true; });
+      return;
+    }
+  }
+}
+
 function pollGamepads(now) {
+  if (chordLearning) {
+    // The buttons being recorded (B, Start …) mustn't also close Settings or open things.
+    Object.keys(readPads()).forEach((a) => { pad.held[a] = true; });
+    requestAnimationFrame(pollGamepads);
+    return;
+  }
+  if (learning) {
+    checkLearning(now);
+    requestAnimationFrame(pollGamepads);
+    return;
+  }
   const pressed = readPads();
   // When another app (Firefox) has focus, swallow input so we don't act on presses meant for it.
   const listening = document.hasFocus();
-  for (const action of ['up', 'down', 'left', 'right', 'ok', 'back', 'menu']) {
+  for (const action of ['up', 'down', 'left', 'right', 'ok', 'back']) {
     if (!pressed[action]) {
       pad.held[action] = false;
       continue;

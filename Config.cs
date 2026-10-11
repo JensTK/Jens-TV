@@ -24,6 +24,17 @@ public sealed class AppConfig
     /// <summary>Holding Back + Start on an Xbox-style controller returns to the launcher.</summary>
     public bool GamepadHome { get; set; } = true;
 
+    /// <summary>
+    /// Only this controller controls the launcher (its name as the browser reports it, e.g. "8BitDo Ultimate 2
+    /// Wireless"; the bracketed vendor/product part is ignored). Empty = any controller.
+    /// </summary>
+    public string? Controller { get; set; }
+
+    /// <summary>
+    /// "Go home" button combination for a HID / DirectInput controller, learned in Settings. Works from any app.
+    /// </summary>
+    public HomeChordSettings? HomeChord { get; set; }
+
     public bool StartWithWindows { get; set; }
 
     /// <summary>
@@ -153,6 +164,16 @@ public sealed class AudioSettings
 
     /// <summary>Put the previous default output back when Jens-TV exits.</summary>
     public bool RestoreOnExit { get; set; } = true;
+}
+
+/// <summary>A controller button combination; held for half a second it returns to the launcher.</summary>
+public sealed class HomeChordSettings
+{
+    /// <summary>The controller's product name (HID), e.g. "8BitDo Ultimate 2 Wireless".</summary>
+    public string? Device { get; set; }
+
+    /// <summary>HID button numbers that must all be held.</summary>
+    public List<int> Buttons { get; set; } = [];
 }
 
 /// <summary>Samsung (Tizen) TV control over the network. The TV needs "Power On with Mobile" switched on.</summary>

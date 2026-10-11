@@ -32,6 +32,7 @@ public sealed class MainWindow : Window
     readonly HotkeyManager _hotkeys = new();
     readonly GamepadWatcher _gamepad;
     readonly TvKeyHook _tvKeys;
+    HidChordWatcher? _hidChord;
     readonly DispatcherTimer _refreshDebounce = new() { Interval = TimeSpan.FromSeconds(1.5) };
     readonly DispatcherTimer _configDebounce = new() { Interval = TimeSpan.FromMilliseconds(700) };
     readonly FileSystemWatcher _configWatcher;
@@ -141,6 +142,7 @@ public sealed class MainWindow : Window
             Log.Error("Audio device watcher failed", ex);
         }
 
+        _hidChord = new HidChordWatcher(_hwnd, GoHome);
         ApplyConfig();
 
         if (_config.SamsungTv?.WakeOnStart == true)
@@ -157,6 +159,9 @@ public sealed class MainWindow : Window
                 break;
             case Win32.WM_DISPLAYCHANGE:
                 RestartRefresh();
+                break;
+            case RawInput.WM_INPUT:
+                _hidChord?.HandleInput(lParam); // not handled: DefWindowProc must still clean up the input
                 break;
         }
         return IntPtr.Zero;
@@ -182,10 +187,15 @@ public sealed class MainWindow : Window
         _hotkeys.Register(_hwnd, _config.HomeHotkeys);
         _tvKeys.SetKeys(_config.TvHotkeys);
 
-        if (_config.GamepadHome)
+        // The Back + Start chord reads XInput, which can't tell controllers apart (no names). With one specific
+        // non-XInput controller chosen it would only react to the *other* controllers, so it's off then.
+        var onlyNonXInputController = !string.IsNullOrWhiteSpace(_config.Controller) &&
+            !_config.Controller.Contains("XInput", StringComparison.OrdinalIgnoreCase);
+        if (_config.GamepadHome && !onlyNonXInputController)
             _gamepad.Start();
         else
             _gamepad.Stop();
+        _hidChord?.Configure(_config.HomeChord);
 
         try
         {
@@ -274,6 +284,8 @@ public sealed class MainWindow : Window
             _config.Slideshow.Folder = string.IsNullOrWhiteSpace(folder.GetString()) ? null : folder.GetString();
         if (s.TryGetProperty("slideshowInterval", out var interval) && interval.TryGetInt32(out var seconds) && seconds >= 5)
             _config.Slideshow.IntervalSeconds = seconds;
+        if (s.TryGetProperty("controller", out var controller) && controller.ValueKind is JsonValueKind.String or JsonValueKind.Null)
+            _config.Controller = string.IsNullOrWhiteSpace(controller.GetString()) ? null : controller.GetString();
         if (Bool("transparentTiles") is { } transparentTiles)
             _config.TransparentTiles = transparentTiles;
         if (_config.SamsungTv != null && Bool("tvWakeOnStart") is { } tvWakeOnStart)
@@ -567,6 +579,26 @@ public sealed class MainWindow : Window
                 break;
             case "saveSettings":
                 SaveSettings(msg);
+                break;
+            case "learnHomeChord":
+                _hidChord?.StartLearning(chord =>
+                {
+                    if (chord != null)
+                    {
+                        _config.HomeChord = chord;
+                        SaveConfig();
+                        _hidChord.Configure(chord);
+                        Log.Info($"Home shortcut set: {chord.Device}, buttons {string.Join(" + ", chord.Buttons)}");
+                    }
+                    Post(new { type = "homeChordLearned", ok = chord != null });
+                    SendState();
+                });
+                break;
+            case "clearHomeChord":
+                _config.HomeChord = null;
+                SaveConfig();
+                _hidChord?.Configure(null);
+                SendState();
                 break;
             case "pickFolder":
                 PickSlideshowFolder(msg.TryGetProperty("current", out var current) ? current.GetString() : null);
@@ -978,6 +1010,7 @@ public sealed class MainWindow : Window
         _hotkeys.Unregister();
         _tvKeys.Dispose();
         _gamepad.Stop();
+        _hidChord?.Dispose();
         _configWatcher.Dispose();
         _audioWatcher?.Dispose();
         if (_config.Audio.RestoreOnExit)

@@ -36,9 +36,20 @@ JensTV.exe ran last (start the published exe once after `dotnet publish`). Chang
 | Move | Arrow keys | D-pad / left stick |
 | Open / select | Enter | A |
 | Back | Esc / Backspace | B |
-| Settings | Up to the gear, then Enter; or Menu key | Up, then A; or Start |
+| Settings | Up to the gear, then Enter | Up, then A |
 | Turn off Jens-TV | Up, Right to the power button, then Enter | Up, Right, then A |
 | **Return home from any app** | Home, media-keyboard Home, or Ctrl+Alt+Home | hold **Back + Start** |
+
+**One controller only:** Settings → Controller → press OK, then any button on the controller you want. After that only
+that controller drives the launcher (matched by name, so dongle, Bluetooth and cable all work); others, like a racing
+wheel or a second pad, are ignored there. Apps such as YouTube or Jellyfin still read every controller themselves.
+The built-in hold-Back+Start chord uses XInput, which only sees Xbox-style controllers and can't tell them apart, so
+it's off when a specific non-XInput (e.g. DirectInput) controller is chosen.
+
+**Home shortcut for any controller (incl. DirectInput):** Settings → Home shortcut on controller → OK, then hold the
+buttons you want (e.g. Select + Start) and let go. Holding them for half a second returns home from any app. It only
+reacts to the controller you set it with, reads HID input in the background (Raw Input), and only listens while a
+shortcut is set. Left/Right on the row switches it off.
 
 Returning home closes the running app (e.g. YouTube's Firefox) and brings the launcher back. The plain Home key
 (`tvHotkeys`) only does this while Jens-TV or the app it launched is in front, so it keeps working normally in
@@ -108,6 +119,8 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
   "homeHotkeys": ["BrowserHome", "Ctrl+Alt+Home"],   // global; WPF key names, modifiers Ctrl/Alt/Shift/Win
   "tvHotkeys": ["Home"],                             // only while Jens-TV or its app is in front
   "gamepadHome": true,
+  "controller": null,             // only this controller drives the launcher (Settings → Controller)
+  "homeChord": null,              // e.g. { "device": "8BitDo Ultimate 2 Wireless", "buttons": [11, 12] } (learned in Settings)
   "startWithWindows": false,
   "launchHotkey": "Ctrl+Alt+T",   // Windows shortcut key on the Start Menu shortcut; "" = none
   "transparentTiles": false,      // logos without tile backgrounds; also a switch in Settings
@@ -165,7 +178,7 @@ icon should then be a logo with a transparent background (PNG, SVG or WebP) to l
 | `SamsungTv.cs` | Wake-on-LAN and the Samsung remote API (keys, pairing) |
 | `Native/Monitors.cs` | Display enumeration with EDID names |
 | `Audio/AudioDevices.cs` | Output device listing and default-device switching |
-| `Input/` | Global hotkeys and system-wide XInput "home" chord |
+| `Input/` | Global hotkeys, XInput "home" chord, HID/DirectInput home shortcut (Raw Input) |
 | `wwwroot/` | Launcher UI (`index.html`, `app.css`, `app.js`) and `inject.js` (runs inside Jellyfin) |
 
 Logs: `%LOCALAPPDATA%\JensTV\jenstv.log`.
