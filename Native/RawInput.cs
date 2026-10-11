@@ -46,6 +46,38 @@ internal static class RawInput
     [DllImport("hid.dll")]
     public static extern bool HidD_GetProductString(SafeFileHandle device, byte[] buffer, uint bufferLength);
 
+    public const ushort HID_USAGE_X = 0x30, HID_USAGE_Y = 0x31, HID_USAGE_HAT_SWITCH = 0x39;
+
+    /// <summary>HIDP_VALUE_CAPS: only the fields we read are declared; the size (72 bytes) matches the native struct.</summary>
+    [StructLayout(LayoutKind.Explicit, Size = 72)]
+    public struct HIDP_VALUE_CAPS
+    {
+        [FieldOffset(18)] public ushort BitSize;
+        [FieldOffset(40)] public int LogicalMin;
+        [FieldOffset(44)] public int LogicalMax;
+    }
+
+    [DllImport("hid.dll")]
+    public static extern int HidP_GetSpecificValueCaps(int reportType, ushort usagePage, ushort linkCollection, ushort usage,
+        [Out] HIDP_VALUE_CAPS[] caps, ref ushort capsLength, IntPtr preparsedData);
+
+    [DllImport("hid.dll")]
+    public static extern int HidP_GetUsageValue(int reportType, ushort usagePage, ushort linkCollection, ushort usage,
+        out uint value, IntPtr preparsedData, IntPtr report, uint reportLength);
+
+    /// <summary>Logical range of a value control (stick axis, hat switch), or null if the device has none.</summary>
+    public static (int Min, int Max)? GetValueRange(IntPtr preparsed, ushort usage)
+    {
+        var caps = new HIDP_VALUE_CAPS[4];
+        ushort length = (ushort)caps.Length;
+        if (HidP_GetSpecificValueCaps(0, HID_USAGE_PAGE_GENERIC, 0, usage, caps, ref length, preparsed) != HIDP_STATUS_SUCCESS || length == 0)
+            return null;
+        var (min, max) = (caps[0].LogicalMin, caps[0].LogicalMax);
+        if (max < min && caps[0].BitSize is > 0 and < 32)
+            max = (int)((1L << caps[0].BitSize) - 1); // an unsigned field whose maximum came through sign-extended
+        return (min, max);
+    }
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern SafeFileHandle CreateFile(string name, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);
 

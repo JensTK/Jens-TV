@@ -1,7 +1,13 @@
 // Injected by Jens-TV into every page shown inside the TV window except the launcher itself (Jellyfin, F1 TV …).
-// Jens-TV fills in tvOrigins below: a JSON array of Jellyfin origins (web apps with forceTvLayout).
+// Jens-TV fills in the placeholders: the Jellyfin origins (web apps with forceTvLayout) and whether to hide gamepads.
 (() => {
   if (location.hostname === 'jenstv.local' || !window.chrome || !window.chrome.webview) return;
+
+  // Jens-TV types arrow keys / Enter / Escape for the controller (Settings → "Controller works as arrow keys in
+  // apps"). Hide the controller from the page so it doesn't also act on the raw buttons (A would count twice).
+  if (__HIDE_GAMEPADS__) {
+    try { Object.defineProperty(Navigator.prototype, 'getGamepads', { value: () => [], configurable: true }); } catch (_) { /* ignore */ }
+  }
 
   const tvOrigins = __TV_ORIGINS__;
   const isJellyfin = tvOrigins.includes(location.origin);

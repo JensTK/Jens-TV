@@ -51,6 +51,12 @@ buttons you want (e.g. Select + Start) and let go. Holding them for half a secon
 reacts to the controller you set it with, reads HID input in the background (Raw Input), and only listens while a
 shortcut is set. Left/Right on the row switches it off.
 
+**Controller in apps:** "Controller works as arrow keys in apps" (Settings) makes the chosen controller type keys while an
+app is in front: D-pad / left stick = arrow keys (held = repeat), A = Enter, B = Escape (`controllerKeys.okButton` /
+`backButton` are HID button numbers; 1 and 2 fit 8BitDo controllers in DirectInput mode). Apps then don't read the
+controller themselves (it's hidden from Jens-TV's pages and switched off in its Firefox), so presses don't count twice.
+The launcher keeps reading the controller directly.
+
 **Start Jens-TV from the controller:** with a home shortcut set, switch on "Start Jens-TV with the shortcut" in
 Settings. A small tray program (`JensTV.Listener.exe`, starts with Windows) then starts Jens-TV when the shortcut is held
 for **1.5 s** (longer than the 0.5 s for going home, so it doesn't happen by accident). It sleeps until Windows delivers
@@ -129,6 +135,7 @@ edit the file by hand (the "Edit config file" button opens it on the PC); saved 
   "controller": null,             // only this controller drives the launcher (Settings → Controller)
   "homeChord": null,              // e.g. { "device": "8BitDo Ultimate 2 Wireless", "buttons": [11, 12] } (learned in Settings)
   "controllerLaunch": false,      // tray listener that starts Jens-TV with the home shortcut (held 1.5 s)
+  "controllerKeys": { "enabled": false, "okButton": 1, "backButton": 2 },  // controller as arrow keys in apps
   "startWithWindows": false,
   "launchHotkey": "Ctrl+Alt+T",   // Windows shortcut key on the Start Menu shortcut; "" = none
   "transparentTiles": false,      // logos without tile backgrounds; also a switch in Settings

@@ -11,10 +11,10 @@ internal static class Win32
 
     public const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4, MOD_WIN = 0x8, MOD_NOREPEAT = 0x4000;
 
-    public const uint SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
+    public const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
     public const int SW_RESTORE = 9, SW_MAXIMIZE = 3;
     public const uint MONITOR_DEFAULTTONEAREST = 2;
-    public const int GW_OWNER = 4;
+    public const int GW_HWNDNEXT = 2, GW_OWNER = 4;
     public const int GWL_EXSTYLE = -20;
     public const long WS_EX_TOOLWINDOW = 0x80;
     public const int ASFW_ANY = -1;
@@ -70,6 +70,56 @@ internal static class Win32
     [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hwnd, int id);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vk);
+
+    // --- Synthesized key presses (controller → keyboard) ---
+
+    public const uint INPUT_KEYBOARD = 1;
+    public const uint KEYEVENTF_EXTENDEDKEY = 0x1, KEYEVENTF_KEYUP = 0x2;
+    public const ushort VK_RETURN = 0x0D, VK_ESCAPE = 0x1B, VK_LEFT = 0x25, VK_UP = 0x26, VK_RIGHT = 0x27, VK_DOWN = 0x28;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KEYBDINPUT { public ushort wVk, wScan; public uint dwFlags, time; public IntPtr dwExtraInfo; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT { public int dx, dy; public uint mouseData, dwFlags, time; public IntPtr dwExtraInfo; }
+
+    /// <summary>INPUT with its union; MOUSEINPUT is the largest member, so it sets the size.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct INPUT
+    {
+        public uint type;
+        public INPUTUNION u;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    public struct INPUTUNION
+    {
+        [FieldOffset(0)] public KEYBDINPUT ki;
+        [FieldOffset(0)] public MOUSEINPUT mi;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)] public static extern uint SendInput(uint count, INPUT[] inputs, int size);
+    [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint mapType);
+
+    /// <summary>Presses or releases a key as if typed (arrow keys need the extended flag).</summary>
+    public static void SendKey(ushort vk, bool down)
+    {
+        var extended = vk is VK_LEFT or VK_UP or VK_RIGHT or VK_DOWN;
+        INPUT[] input =
+        [
+            new()
+            {
+                type = INPUT_KEYBOARD,
+                u = new INPUTUNION { ki = new KEYBDINPUT
+                {
+                    wVk = vk,
+                    wScan = (ushort)MapVirtualKey(vk, 0),
+                    dwFlags = (extended ? KEYEVENTF_EXTENDEDKEY : 0) | (down ? 0 : KEYEVENTF_KEYUP),
+                } },
+            },
+        ];
+        SendInput(1, input, Marshal.SizeOf<INPUT>());
+    }
 
     // --- Low-level keyboard hook (keys that act as Home only while the TV is in front) ---
 

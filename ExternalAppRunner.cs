@@ -37,11 +37,12 @@ public sealed class ExternalAppRunner
         }
     }
 
-    public void StartFirefox(AppEntry app, MonitorInfo? target, FirefoxSettings firefox)
+    /// <param name="gamepads">False when Jens-TV turns the controller into keys, so pages don't also read it.</param>
+    public void StartFirefox(AppEntry app, MonitorInfo? target, FirefoxSettings firefox, bool gamepads = true)
     {
         var exe = FirefoxSupport.FindExecutable(firefox.Path)
             ?? throw new InvalidOperationException("Firefox was not found. Set firefox.path in the config.");
-        var profile = FirefoxSupport.PrepareProfile(firefox, app);
+        var profile = FirefoxSupport.PrepareProfile(firefox, app, gamepads);
 
         // -wait-for-browser keeps the launcher process alive until the browser exits, so we can track it.
         var args = new List<string> { "-no-remote", "-wait-for-browser", "-profile", profile };
@@ -186,6 +187,20 @@ public sealed class ExternalAppRunner
             StartPlacement(process.Id, target, _app.Maximize);
     }
 
+    /// <summary>The running app's visible top-level windows (empty when nothing runs).</summary>
+    public List<IntPtr> AppWindows()
+    {
+        var process = _process;
+        try
+        {
+            return process is { HasExited: false } ? WindowFinder.TopLevelWindows(ProcessTree.Get(process.Id)) : [];
+        }
+        catch (InvalidOperationException)
+        {
+            return [];
+        }
+    }
+
     /// <summary>
     /// Displays changed while the app runs (e.g. the TV re-connecting as it wakes, which makes Windows park its windows
     /// on another screen): put the app back on the TV and in front again.
@@ -318,7 +333,7 @@ public static class FirefoxSupport
     }
 
     /// <summary>Writes the profile's user.js. Returns the profile folder.</summary>
-    public static string PrepareProfile(FirefoxSettings settings, AppEntry? app = null)
+    public static string PrepareProfile(FirefoxSettings settings, AppEntry? app = null, bool gamepads = true)
     {
         var dir = ProfileDirFor(app);
         Directory.CreateDirectory(dir);
@@ -347,6 +362,8 @@ public static class FirefoxSupport
             ["media.eme.enabled"] = true,
             ["media.gmp-widevinecdm.enabled"] = true,
             ["media.gmp-widevinecdm.visible"] = true,
+            // Off while Jens-TV types keys for the controller, so YouTube doesn't also act on the raw buttons.
+            ["dom.gamepad.enabled"] = gamepads,
         };
         if (!string.IsNullOrWhiteSpace(userAgent))
             prefs["general.useragent.override"] = userAgent;

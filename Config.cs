@@ -35,6 +35,9 @@ public sealed class AppConfig
     /// </summary>
     public HomeChordSettings? HomeChord { get; set; }
 
+    /// <summary>The controller acting as arrow keys / Enter / Escape inside apps.</summary>
+    public ControllerKeySettings ControllerKeys { get; set; } = new();
+
     /// <summary>
     /// Run the tray listener (starts with Windows) that starts Jens-TV when the home shortcut is held for 1.5 s.
     /// </summary>
@@ -169,6 +172,21 @@ public sealed class AudioSettings
 
     /// <summary>Put the previous default output back when Jens-TV exits.</summary>
     public bool RestoreOnExit { get; set; } = true;
+}
+
+/// <summary>
+/// Inside apps (YouTube, Jellyfin, F1 TV …) the controller types keys: D-pad / left stick = arrow keys, OK = Enter,
+/// Back = Escape. Apps then don't read the controller themselves, so presses don't count twice.
+/// </summary>
+public sealed class ControllerKeySettings
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>HID button number that types Enter (A on 8BitDo controllers in DirectInput mode).</summary>
+    public int OkButton { get; set; } = 1;
+
+    /// <summary>HID button number that types Escape (B on 8BitDo controllers in DirectInput mode).</summary>
+    public int BackButton { get; set; } = 2;
 }
 
 /// <summary>A controller button combination; held for half a second it returns to the launcher.</summary>

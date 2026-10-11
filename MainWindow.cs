@@ -32,7 +32,7 @@ public sealed class MainWindow : Window
     readonly HotkeyManager _hotkeys = new();
     readonly GamepadWatcher _gamepad;
     readonly TvKeyHook _tvKeys;
-    HidChordWatcher? _hidChord;
+    HidControllerWatcher? _controllerInput;
     readonly DispatcherTimer _refreshDebounce = new() { Interval = TimeSpan.FromSeconds(1.5) };
     readonly DispatcherTimer _configDebounce = new() { Interval = TimeSpan.FromMilliseconds(700) };
     readonly FileSystemWatcher _configWatcher;
@@ -50,6 +50,8 @@ public sealed class MainWindow : Window
     bool _screensTurnedOff;
     bool _refocusAfterDisplayChange;
     bool _tvWaking;
+    bool _appShouldBeInFront; // a launched app should be on screen (not after Home)
+    readonly DispatcherTimer _zOrderGuard = new() { Interval = TimeSpan.FromSeconds(1) };
     string? _injectedScriptId;
     string? _spatnavScriptId;
     string? _mappedPhotoFolder;
@@ -73,9 +75,12 @@ public sealed class MainWindow : Window
         Content = _web;
 
         _gamepad = new GamepadWatcher(GoHome);
+        _zOrderGuard.Tick += (_, _) => GuardAppZOrder();
+        _zOrderGuard.Start();
         _tvKeys = new TvKeyHook(IsTvInFront, GoHome);
         _runner.Exited += () => Dispatcher.InvokeAsync(() =>
         {
+            _appShouldBeInFront = false;
             BringToFront();
             SendState();
         });
@@ -143,7 +148,7 @@ public sealed class MainWindow : Window
             Log.Error("Audio device watcher failed", ex);
         }
 
-        _hidChord = new HidChordWatcher(_hwnd, GoHome);
+        _controllerInput = new HidControllerWatcher(_hwnd, GoHome, IsTvInFront);
         ApplyConfig();
 
         if (_config.SamsungTv?.WakeOnStart == true)
@@ -162,7 +167,7 @@ public sealed class MainWindow : Window
                 RestartRefresh();
                 break;
             case RawInput.WM_INPUT:
-                _hidChord?.HandleInput(lParam); // not handled: DefWindowProc must still clean up the input
+                _controllerInput?.HandleInput(lParam); // not handled: DefWindowProc must still clean up the input
                 break;
         }
         return IntPtr.Zero;
@@ -196,7 +201,7 @@ public sealed class MainWindow : Window
             _gamepad.Start();
         else
             _gamepad.Stop();
-        _hidChord?.Configure(_config.HomeChord);
+        ConfigureControllerInput();
 
         try
         {
@@ -296,6 +301,8 @@ public sealed class MainWindow : Window
             _config.Slideshow.IntervalSeconds = seconds;
         if (s.TryGetProperty("controller", out var controller) && controller.ValueKind is JsonValueKind.String or JsonValueKind.Null)
             _config.Controller = string.IsNullOrWhiteSpace(controller.GetString()) ? null : controller.GetString();
+        if (Bool("controllerKeys") is { } controllerKeys)
+            _config.ControllerKeys.Enabled = controllerKeys;
         if (Bool("controllerLaunch") is { } controllerLaunch)
             _config.ControllerLaunch = controllerLaunch;
         if (Bool("transparentTiles") is { } transparentTiles)
@@ -356,10 +363,53 @@ public sealed class MainWindow : Window
             return;
 
         // Move while restored, then maximize: a borderless maximized WPF window covers the whole monitor it's on.
+        Log.Info($"Placing Jens-TV on {_target.FriendlyName}{(_runner.RunningAppId is { } app ? $" (behind {app})" : "")}");
         var b = _target.Bounds;
         WindowState = WindowState.Normal;
         Win32.SetWindowPos(_hwnd, IntPtr.Zero, b.X, b.Y, b.Width, b.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
         WindowState = WindowState.Maximized;
+
+        // Maximizing also raises the window. With an app running (e.g. the TV re-connecting while YouTube is open)
+        // that would put the launcher over the app, so tuck the launcher back behind it.
+        if (_runner.RunningAppId != null)
+            KeepAppInFront();
+    }
+
+    /// <summary>
+    /// Safety net, once a second while an app should be on screen: if the launcher window has ended up above the app
+    /// (whatever caused it), put it back behind. Logged, so the cause can be traced.
+    /// </summary>
+    void GuardAppZOrder()
+    {
+        if (!_appShouldBeInFront || _runner.RunningAppId == null)
+            return;
+        var appWindows = _runner.AppWindows();
+        if (appWindows.Count == 0)
+            return;
+
+        // Walk down the z-order from the launcher: meeting an app window means the launcher is above it.
+        var below = Win32.GetWindow(_hwnd, Win32.GW_HWNDNEXT);
+        for (var steps = 0; below != IntPtr.Zero && steps < 2000; steps++, below = Win32.GetWindow(below, Win32.GW_HWNDNEXT))
+        {
+            if (!appWindows.Contains(below))
+                continue;
+            Log.Info($"Launcher was above {_runner.RunningAppId}; moving it back behind");
+            KeepAppInFront();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Puts the launcher window directly behind the running app's window. Changing our own window's z-order is always
+    /// allowed (unlike taking focus), so this works even when Windows won't hand over the foreground.
+    /// </summary>
+    void KeepAppInFront()
+    {
+        var appWindows = _runner.AppWindows();
+        if (appWindows.Count == 0)
+            return;
+        Win32.SetWindowPos(_hwnd, appWindows[0], 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+        Win32.SetForegroundWindow(appWindows[0]); // may be refused; the z-order above is what matters for the picture
     }
 
     /// <summary>
@@ -529,7 +579,9 @@ public sealed class MainWindow : Window
             var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
 
             var template = await File.ReadAllTextAsync(Path.Combine(wwwroot, "inject.js"));
-            var script = template.Replace("__TV_ORIGINS__", JsonSerializer.Serialize(OriginsOf(a => a.ForceTvLayout)));
+            var script = template
+                .Replace("__TV_ORIGINS__", JsonSerializer.Serialize(OriginsOf(a => a.ForceTvLayout)))
+                .Replace("__HIDE_GAMEPADS__", _config.ControllerKeys.Enabled ? "true" : "false");
             _injectedScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(script);
 
             // Remote navigation for mouse-only sites, only when some app wants it.
@@ -593,13 +645,13 @@ public sealed class MainWindow : Window
                 SaveSettings(msg);
                 break;
             case "learnHomeChord":
-                _hidChord?.StartLearning(chord =>
+                _controllerInput?.StartLearning(chord =>
                 {
                     if (chord != null)
                     {
                         _config.HomeChord = chord;
                         SaveConfig();
-                        _hidChord.Configure(chord);
+                        ConfigureControllerInput();
                         Log.Info($"Home shortcut set: {chord.Device}, buttons {string.Join(" + ", chord.Buttons)}");
                     }
                     Post(new { type = "homeChordLearned", ok = chord != null });
@@ -609,7 +661,7 @@ public sealed class MainWindow : Window
             case "clearHomeChord":
                 _config.HomeChord = null;
                 SaveConfig();
-                _hidChord?.Configure(null);
+                ConfigureControllerInput();
                 SendState();
                 break;
             case "pickFolder":
@@ -875,7 +927,7 @@ public sealed class MainWindow : Window
     {
         try
         {
-            FirefoxSupport.PrepareProfile(settings); // user.js must enable profile add-ons before Firefox first sees them
+            FirefoxSupport.PrepareProfile(settings, gamepads: !_config.ControllerKeys.Enabled); // add-ons enabled before Firefox first sees them
             _failedExtensions = await FirefoxExtensions.SyncAsync(exe, FirefoxSupport.ProfileDir, settings.Extensions.ToList());
         }
         catch (Exception ex)
@@ -889,7 +941,7 @@ public sealed class MainWindow : Window
             {
                 var dir = FirefoxSupport.ProfileDirFor(app);
                 var isNew = !File.Exists(Path.Combine(dir, "prefs.js")); // Firefox writes prefs.js on its first run
-                FirefoxSupport.PrepareProfile(settings, app);
+                FirefoxSupport.PrepareProfile(settings, app, gamepads: !_config.ControllerKeys.Enabled);
                 if (isNew)
                 {
                     Log.Info($"First run of the Firefox profile for {app.Name}");
@@ -925,6 +977,7 @@ public sealed class MainWindow : Window
             {
                 // Still running in the background (e.g. Spotify): bring it back rather than restarting it.
                 _runner.Activate(_target);
+                _appShouldBeInFront = true;
                 return;
             }
 
@@ -937,10 +990,12 @@ public sealed class MainWindow : Window
                     _web.CoreWebView2.Navigate(uri.ToString());
                     break;
                 case "firefox":
-                    _runner.StartFirefox(app, _target, _config.Firefox);
+                    _runner.StartFirefox(app, _target, _config.Firefox, gamepads: !_config.ControllerKeys.Enabled);
+                    _appShouldBeInFront = true;
                     break;
                 case "exe":
                     _runner.StartExe(app, _target);
+                    _appShouldBeInFront = true;
                     break;
                 default:
                     throw new InvalidOperationException($"Unknown app type \"{app.Type}\"");
@@ -963,7 +1018,19 @@ public sealed class MainWindow : Window
         Win32.GetWindowThreadProcessId(Win32.GetForegroundWindow(), out var pid);
         if (pid == Environment.ProcessId)
             return !IsLauncherShowing();
-        return _runner.OwnsProcess((int)pid);
+        return _runner.OwnsProcess((int)pid); // takes a process snapshot: don't call this per controller report
+    }
+
+    /// <summary>
+    /// Home shortcut and controller-as-keyboard. Keys come only from the chosen controller (Settings → Controller; the
+    /// browser's name for it minus the "(Vendor … Product …)" part is its HID product name), else the shortcut's.
+    /// </summary>
+    void ConfigureControllerInput()
+    {
+        var keysDevice = !string.IsNullOrWhiteSpace(_config.Controller)
+            ? System.Text.RegularExpressions.Regex.Replace(_config.Controller, @"\s*\(.*$", "").Trim()
+            : _config.HomeChord?.Device;
+        _controllerInput?.Configure(_config.HomeChord, _config.ControllerKeys, keysDevice);
     }
 
     /// <summary>Jens-TV was started again while running (launch hotkey): come to the front on the home screen.</summary>
@@ -977,6 +1044,7 @@ public sealed class MainWindow : Window
 
     void GoHome()
     {
+        _appShouldBeInFront = false; // the launcher belongs in front now, even if an app keeps running (Spotify)
         if (_runner.CloseOnHome)
             _runner.Stop();
         if (_web.CoreWebView2 != null && !IsLauncherShowing())
@@ -1022,7 +1090,7 @@ public sealed class MainWindow : Window
         _hotkeys.Unregister();
         _tvKeys.Dispose();
         _gamepad.Stop();
-        _hidChord?.Dispose();
+        _controllerInput?.Dispose();
         _configWatcher.Dispose();
         _audioWatcher?.Dispose();
         if (_config.Audio.RestoreOnExit)
